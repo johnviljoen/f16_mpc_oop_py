@@ -26,6 +26,8 @@ from utils import tic, toc, vis
 # import scipy fmin for trim function
 from scipy.optimize import minimize
 
+from sys import exit
+
 class F16_env(gym.Env):
     """Custom Environment that follows gym interface"""
   
@@ -44,6 +46,8 @@ class F16_env(gym.Env):
         self.ic = x0
         
         self.x = x0
+        
+        self.measured_states = [2,6,7,8,9,10,11]
         
         self.u = x0[12:16]
         
@@ -137,6 +141,12 @@ class F16_env(gym.Env):
         self.xdot[12:18] = temp
         
         #return xdot
+        
+    def get_obs(self):
+        
+        measurements = list(self.x[i] for i in self.measured_states)
+        
+        return measurements
         
     def _trim_obj_func(self, UX0, h, V):
               
@@ -235,36 +245,74 @@ class F16_env(gym.Env):
         
         return opt
     
-    # def linearise(self, x, u, output_vars, fi_flag, nlplant):
+    def linearise(self):
     
-    #     eps = 1e-06
+        eps = 1e-06
         
-    #     A = np.zeros([len(self.x),len(self.x)])
-    #     B = np.zeros([len(self.x),len(self.u)])
-    #     C = np.zeros([len(output_vars),len(x)])
-    #     D = np.zeros([len(output_vars),len(u)])
+        A = np.zeros([len(self.x),len(self.x)])
+        B = np.zeros([len(self.x),len(self.u)])
+        C = np.zeros([len(self.measured_states),len(self.x)])
+        D = np.zeros([len(self.measured_states),len(self.u)])
         
-    #     # Perturb each of the state variables and compute linearization
-    #     for i in range(len(x)):
+        # save prior state of x, u
+        x = self.x
+        u = self.u
+        
+        # Perturb each of the state variables and compute linearization,
+        for i in range(len(x)):
             
-    #         dx = np.zeros((len(x),))
-    #         dx[i] = eps
+            dx = np.zeros((len(x),))
+            dx[i] = eps
             
-    #         xdot_control
+            # restore
+            self.x = x
             
-    #         A[:, i] = (calc_xdot(x + dx, u, fi_flag, nlplant) - calc_xdot(x, u, fi_flag, nlplant)) / eps
-    #         C[:, i] = (calc_out(x + dx, u, output_vars) - calc_out(x, u, output_vars)) / eps
+            print(self.x)
+            print(self.xdot)
             
-    #     # Perturb each of the input variables and compute linearization
-    #     for i in range(len(u)):
+            self.calc_xdot()
+            xdot_control = self.xdot
             
-    #         du = np.zeros((len(u),))
-    #         du[i] = eps
+            print(self.x)
+            print(self.xdot)
+            
+            exit()
+            
+            measured_xdot_control = np.array(list(self.xdot[i] for i in self.measured_states))
+            
+            self.x = self.x + dx
+            self.calc_xdot()
+            xdot_pert = self.xdot
+            
+            measured_xdot_pert = np.array(list(self.xdot[i] for i in self.measured_states))
+            
+            A[:, i] = (xdot_pert - xdot_control) / eps
+            C[:, i] = (measured_xdot_pert - measured_xdot_control) / eps
+            
+        # restore x
+        self.x = x
+            
+        # Perturb each of the input variables and compute linearization
+        for i in range(len(u)):
+            
+            du = np.zeros((len(u),))
+            du[i] = eps
+            
+            self.calc_xdot()
+            xdot_control = self.xdot
+            
+            measured_xdot_control = np.array(list(self.xdot[i] for i in self.measured_states))
+            
+            self.u += du
+            self.calc_xdot()
+            xdot_pert = self.xdot
+            
+            measured_xdot_pert = np.array(list(self.xdot[i] for i in self.measured_states))
                     
-    #         B[:, i] = (calc_xdot(x, u + du, fi_flag, nlplant) - calc_xdot(x, u, fi_flag, nlplant)) / eps
-    #         D[:, i] = (calc_out(x, u + du, output_vars) - calc_out(x, u, output_vars)) / eps
+            B[:, i] = (xdot_pert - xdot_control) / eps
+            D[:, i] = (measured_xdot_pert - measured_xdot_control) / eps
         
-    #     return A, B, C, D
+        return A, B, C, D
         
     
     def step(self, action):
@@ -293,6 +341,10 @@ class F16_env(gym.Env):
 
 model = F16_env(act_lim, x_lim, x0, paras_sim, paras_mpc)
 model.trim(10000,700)
+
+A,B,C,D = model.linearise()
+
+exit()
 
 rng = np.linspace(paras_sim[1], paras_sim[2], int((paras_sim[2]-paras_sim[1])/paras_sim[0]))
 output_vars = [6,7,8,9,10,11]
