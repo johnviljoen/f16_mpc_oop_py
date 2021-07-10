@@ -77,6 +77,8 @@ u = x[12:16]
 
 A,B,C,D = linearise(x, u, output_vars, fi_flag, nlplant)
 
+exit()
+
 # vert stack
 u_seq = np.array([u] * paras_mpc[0])
 u_seq_flat = u_seq.reshape(u_seq.shape[0]*u_seq.shape[1],)

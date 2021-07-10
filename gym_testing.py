@@ -11,6 +11,8 @@ from parameters import initial_state_vector_ft_rad as x0
 from parameters import simulation_parameters as paras_sim
 from parameters import paras_mpc
 
+from mpc import linearise
+
 from ctypes import CDLL
 import ctypes
 import os
@@ -39,9 +41,9 @@ class F16_env(gym.Env):
         # They must be gym.spaces objects
         
         # ignoring lef actuator limits as they are not directly commanded
-        self.action_space = spaces.Box(low=np.array(act_lim[1])[0:4], high=np.array(act_lim[0])[0:4])
+        self.action_space = spaces.Box(low=np.array(act_lim[1])[0:4], high=np.array(act_lim[0])[0:4], dtype=np.float32)
         
-        self.observation_space = spaces.Box(low=np.array(x_lim[1]), high=np.array(x_lim[0]))
+        self.observation_space = spaces.Box(low=np.array(x_lim[1]), high=np.array(x_lim[0]), dtype=np.float32)
         
         self.ic = x0
         
@@ -72,75 +74,76 @@ class F16_env(gym.Env):
         self.xdot = np.zeros(len(x0))
         
         
-    def _upd_thrust(self):
+    def _upd_thrust(self, state, cmd):
         # command saturation
-        self.u[0] = np.clip(self.u[0],self.action_space.low[0],self.action_space.high[0])
+        cmd = np.clip(cmd,self.action_space.low[0],self.action_space.high[0])
         # rate saturation
-        T_grad = np.clip(self.u[0] - self.x[12], -10000, 10000)
+        T_grad = np.clip(cmd - state, -10000, 10000)
         return T_grad
     
-    def _upd_dstab(self):
+    def _upd_dstab(self, state, cmd):
         # command saturation
-        self.u[1] = np.clip(self.u[1],self.action_space.low[1],self.action_space.high[1])
+        cmd = np.clip(cmd,self.action_space.low[1],self.action_space.high[1])
         # rate saturation
-        dh_grad = np.clip(20.2*(self.u[1] - self.x[13]), -60, 60)
+        dh_grad = np.clip(20.2*(cmd - state), -60, 60)
         return dh_grad
     
-    def _upd_ail(self):
+    def _upd_ail(self, state, cmd):
         # command saturation
-        self.u[2] = np.clip(self.u[2],self.action_space.low[2],self.action_space.high[2])
+        cmd = np.clip(cmd,self.action_space.low[2],self.action_space.high[2])
         # rate saturation
-        da_grad = np.clip(20.2*(self.u[2] - self.x[14]), -80, 80)
+        da_grad = np.clip(20.2*(cmd - state), -80, 80)
         return da_grad
     
-    def _upd_rud(self):
+    def _upd_rud(self, state, cmd):
         # command saturation
-        self.u[3] = np.clip(self.u[3],self.action_space.low[3],self.action_space.high[3])
+        cmd = np.clip(cmd,self.action_space.low[3],self.action_space.high[3])
         # rate saturation
-        dr_grad = np.clip(20.2*(self.u[3] - self.x[15]), -120, 120)
+        dr_grad = np.clip(20.2*(cmd - state), -120, 120)
         return dr_grad
     
-    def _upd_lef(self):
+    def _upd_lef(self, x):
         
-        self._nlplant.atmos(ctypes.c_double(self.x[2]),ctypes.c_double(self.x[6]),ctypes.c_void_p(self.coeff.ctypes.data))
+        self._nlplant.atmos(ctypes.c_double(x[2]),ctypes.c_double(x[6]),ctypes.c_void_p(self.coeff.ctypes.data))
         atmos_out = self.coeff[1]/self.coeff[2] * 9.05
-        alpha_deg = self.x[7]*180/np.pi
+        alpha_deg = x[7]*180/np.pi
         
-        LF_err = alpha_deg - (self.x[17] + (2 * alpha_deg))
+        LF_err = alpha_deg - (x[17] + (2 * alpha_deg))
         #lef_state_1 += LF_err*7.25*time_step
-        LF_out = (self.x[17] + (2 * alpha_deg)) * 1.38
+        LF_out = (x[17] + (2 * alpha_deg)) * 1.38
         
         lef_cmd = LF_out + 1.45 - atmos_out
         
         # command saturation
         lef_cmd = np.clip(lef_cmd,0,25)
         # rate saturation
-        lef_err = np.clip((1/0.136) * (lef_cmd - self.x[16]),-25,25)        
+        lef_err = np.clip((1/0.136) * (lef_cmd - x[16]),-25,25)   
+        
         return LF_err*7.25, lef_err
     
-    def calc_xdot(self):
+    def calc_xdot(self, x, u):
         
         # initialise variables
-        #xdot = np.zeros(18)
+        xdot = np.zeros(18)
         temp = np.zeros(6)
         
         #--------------Thrust Model--------------#
-        temp[0] = self._upd_thrust()
+        temp[0] = self._upd_thrust(x[12], u[0])
         #--------------Dstab Model---------------#
-        temp[1] = self._upd_dstab()
+        temp[1] = self._upd_dstab(x[13], u[1])
         #-------------aileron model--------------#
-        temp[2] = self._upd_ail()
+        temp[2] = self._upd_ail(x[14], u[2])
         #--------------rudder model--------------#
-        temp[3] = self._upd_rud()
+        temp[3] = self._upd_rud(x[15], u[3])
         #--------leading edge flap model---------#
-        temp[5], temp[4] = self._upd_lef()
+        temp[5], temp[4] = self._upd_lef(x)
         
         #----------run nlplant for xdot----------#
-        self._nlplant.Nlplant(ctypes.c_void_p(self.x.ctypes.data), ctypes.c_void_p(self.xdot.ctypes.data), ctypes.c_int(self.paras_sim[4]))    
+        self._nlplant.Nlplant(ctypes.c_void_p(x.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(self.paras_sim[4]))    
         
-        self.xdot[12:18] = temp
+        xdot[12:18] = temp
         
-        #return xdot
+        return xdot
         
     def get_obs(self):
         
@@ -200,7 +203,7 @@ class F16_env(gym.Env):
         self.u = self.x[12:16]
         
         # calc xdot
-        self.calc_xdot()
+        self.xdot = self.calc_xdot(self.x, self.u)
         
         phi_w = 10
         theta_w = 10
@@ -254,63 +257,25 @@ class F16_env(gym.Env):
         C = np.zeros([len(self.measured_states),len(self.x)])
         D = np.zeros([len(self.measured_states),len(self.u)])
         
-        # save prior state of x, u
-        x = self.x
-        u = self.u
-        
         # Perturb each of the state variables and compute linearization,
-        for i in range(len(x)):
+        for i in range(len(self.x)):
             
-            dx = np.zeros((len(x),))
+            dx = np.zeros((len(self.x),))
             dx[i] = eps
-            
-            # restore
-            self.x = x
-            
-            print(self.x)
-            print(self.xdot)
-            
-            self.calc_xdot()
-            xdot_control = self.xdot
-            
-            print(self.x)
-            print(self.xdot)
-            
-            exit()
-            
-            measured_xdot_control = np.array(list(self.xdot[i] for i in self.measured_states))
-            
-            self.x = self.x + dx
-            self.calc_xdot()
-            xdot_pert = self.xdot
-            
-            measured_xdot_pert = np.array(list(self.xdot[i] for i in self.measured_states))
-            
-            A[:, i] = (xdot_pert - xdot_control) / eps
-            C[:, i] = (measured_xdot_pert - measured_xdot_control) / eps
-            
-        # restore x
-        self.x = x
+                        
+            A[:, i] = (self.calc_xdot(self.x + dx, self.u) - self.calc_xdot(self.x, self.u)) / eps
+            C[:, i] = np.array(list((self.calc_xdot(self.x + dx, self.u) - 
+                                     self.calc_xdot(self.x, self.u))[i] for i in self.measured_states)) / eps
             
         # Perturb each of the input variables and compute linearization
-        for i in range(len(u)):
+        for i in range(len(self.u)):
             
-            du = np.zeros((len(u),))
+            du = np.zeros((len(self.u),))
             du[i] = eps
-            
-            self.calc_xdot()
-            xdot_control = self.xdot
-            
-            measured_xdot_control = np.array(list(self.xdot[i] for i in self.measured_states))
-            
-            self.u += du
-            self.calc_xdot()
-            xdot_pert = self.xdot
-            
-            measured_xdot_pert = np.array(list(self.xdot[i] for i in self.measured_states))
                     
-            B[:, i] = (xdot_pert - xdot_control) / eps
-            D[:, i] = (measured_xdot_pert - measured_xdot_control) / eps
+            B[:, i] = (self.calc_xdot(self.x, self.u + du) - self.calc_xdot(self.x, self.u)) / eps
+            D[:, i] = np.array(list((self.calc_xdot(self.x, self.u + du) - 
+                                     self.calc_xdot(self.x, self.u))[i] for i in self.measured_states))  / eps
         
         return A, B, C, D
         
@@ -321,7 +286,7 @@ class F16_env(gym.Env):
         self.u = action
         
         # find xdot
-        self.calc_xdot()
+        self.xdot = self.calc_xdot(self.x, self.u)
         
         # update x
         self.x += self.xdot*self.dt
@@ -344,7 +309,7 @@ model.trim(10000,700)
 
 A,B,C,D = model.linearise()
 
-exit()
+#exit()
 
 rng = np.linspace(paras_sim[1], paras_sim[2], int((paras_sim[2]-paras_sim[1])/paras_sim[0]))
 output_vars = [6,7,8,9,10,11]
@@ -353,8 +318,8 @@ output_vars = [6,7,8,9,10,11]
 x_storage = np.zeros([len(rng),len(model.x)])
 A = np.zeros([len(model.x),len(model.x),len(rng)])
 B = np.zeros([len(model.x),len(model.u),len(rng)])
-C = np.zeros([len(output_vars),len(model.x),len(rng)])
-D = np.zeros([len(output_vars),len(model.u),len(rng)])
+C = np.zeros([len(model.measured_states),len(model.x),len(rng)])
+D = np.zeros([len(model.measured_states),len(model.u),len(rng)])
 
 bar = progressbar.ProgressBar(maxval=len(rng)).start()
 
@@ -366,7 +331,10 @@ for idx, val in enumerate(rng):
     #------------linearise model-------------#
     #----------------------------------------#
     
-    #[A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = linearise(x, u, output_vars, fi_flag, nlplant)
+    # the object oriented linearisation function is about 10x slower than the functional programming one
+    # therefore it is commented out here and the functional one is implemented
+    #[A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = model.linearise()
+    [A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = linearise(model.x, model.u, model.measured_states, model.paras_sim[4], model._nlplant)
     
     #----------------------------------------#
     #--------------Take Action---------------#
