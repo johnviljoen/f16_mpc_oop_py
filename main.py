@@ -19,7 +19,7 @@ from F16_gym import F16_env
 
 env = DummyVecEnv([lambda: F16_env(x0, paras_sim)])
 
-model = A2C(ActorCriticPolicy, env, verbose = 1)
+model = A2C('MlpPolicy', env, verbose = 1)
 model.learn(total_timesteps=10000)
 
 # obs = env.reset()

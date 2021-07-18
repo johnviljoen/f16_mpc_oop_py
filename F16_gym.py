@@ -21,16 +21,120 @@ from utils import tic, toc, vis
 # import scipy fmin for trim function
 from scipy.optimize import minimize
 
-class F16_env(gym.Env, F16_sim.F16_sim):
+import os
+from ctypes import CDLL
+import ctypes
+
+from stable_baselines3 import A2C
+from stable_baselines3.common.vec_env import DummyVecEnv
+
+from stable_baselines3.common.env_checker import check_env
+
+class F16_env(gym.Env):
+    
+    metadata = {'render.modes': ['human']}
     
     def __init__(self, x0, paras_sim):
-        super(F16_env, self).__init__(x0, paras_sim[4], paras_sim[3], paras_sim[0])
+        super(F16_env, self).__init__()
+        
+        self.x = x0
+        self.u = x0[12:16]
+        self.fi_flag = paras_sim[4]
+        self.dt = paras_sim[0]
+        self.xdot = np.zeros([x0.shape[0]])
+        
+        # create interface with c shared library .so file in folder "C"
+        if paras_sim[3] == 1:
+            so_file = os.getcwd() + "/C/nlplant_xcg35.so"
+        elif paras_sim[3] == 0:
+            so_file = os.getcwd() + "/C/nlplant_xcg25.so"
+        nlplant = CDLL(so_file)
+        self.nlplant = nlplant
         
         # ignoring lef actuator limits as they are not directly commanded
         self.action_space = spaces.Box(low=np.array(act_lim[1])[0:4], high=np.array(act_lim[0])[0:4], dtype=np.float32)
-        self.observation_space = spaces.Box(low=np.array(x_lim[1]), high=np.array(x_lim[0]), dtype=np.float32)
+        self.observation_space = spaces.Box(low=np.array(x_lim[1] + act_lim[1]), high=np.array(x_lim[0] + act_lim[0]), shape=(17,), dtype=np.float32)
         self.measured_states = [2,6,7,8,9,10,11]
         self.t = 0
+        
+    @staticmethod
+    def upd_thrust(T_cmd, T_state):
+        # command saturation
+        T_cmd = np.clip(T_cmd,act_lim[1][0],act_lim[0][0])
+        # rate saturation
+        T_err = np.clip(T_cmd - T_state, -10000, 10000)
+        return T_err
+    
+    @staticmethod
+    def upd_dstab(dstab_cmd, dstab_state):
+        # command saturation
+        dstab_cmd = np.clip(dstab_cmd,act_lim[1][1],act_lim[0][1])
+        # rate saturation
+        dstab_err = np.clip(20.2*(dstab_cmd - dstab_state), -60, 60)
+        return dstab_err
+    
+    @staticmethod
+    def upd_ail(ail_cmd, ail_state):
+        # command saturation
+        ail_cmd = np.clip(ail_cmd,act_lim[1][2],act_lim[0][2])
+        # rate saturation
+        ail_err = np.clip(20.2*(ail_cmd - ail_state), -80, 80)
+        return ail_err
+    
+    @staticmethod
+    def upd_rud(rud_cmd, rud_state):
+        # command saturation
+        rud_cmd = np.clip(rud_cmd,act_lim[1][3],act_lim[0][3])
+        # rate saturation
+        rud_err = np.clip(20.2*(rud_cmd - rud_state), -120, 120)
+        return rud_err
+    
+    @staticmethod
+    def upd_lef(h, V, coeff, alpha, lef_state_1, lef_state_2, nlplant):
+        
+        nlplant.atmos(ctypes.c_double(h),ctypes.c_double(V),ctypes.c_void_p(coeff.ctypes.data))
+        atmos_out = coeff[1]/coeff[2] * 9.05
+        alpha_deg = alpha*180/np.pi
+        
+        LF_err = alpha_deg - (lef_state_1 + (2 * alpha_deg))
+        #lef_state_1 += LF_err*7.25*time_step
+        LF_out = (lef_state_1 + (2 * alpha_deg)) * 1.38
+        
+        lef_cmd = LF_out + 1.45 - atmos_out
+        
+        # command saturation
+        lef_cmd = np.clip(lef_cmd,act_lim[1][4],act_lim[0][4])
+        # rate saturation
+        lef_err = np.clip((1/0.136) * (lef_cmd - lef_state_2),-25,25)
+        # integrate
+        #lef_state_2 += lef_err*time_step
+        
+        return LF_err*7.25, lef_err
+    
+    def calc_xdot(self, x, u):
+        
+        # initialise variables
+        xdot = np.zeros(18)
+        temp = np.zeros(6)
+        coeff = np.zeros(3)
+        
+        #--------------Thrust Model--------------#
+        temp[0] = self.upd_thrust(u[0], x[12])
+        #--------------Dstab Model---------------#
+        temp[1] = self.upd_dstab(u[1], x[13])
+        #-------------aileron model--------------#
+        temp[2] = self.upd_ail(u[2], x[14])
+        #--------------rudder model--------------#
+        temp[3] = self.upd_rud(u[3], x[15])
+        #--------leading edge flap model---------#
+        temp[5], temp[4] = self.upd_lef(x[2], x[6], coeff, x[7], x[17], x[16], self.nlplant)
+        
+        #----------run nlplant for xdot----------#
+        self.nlplant.Nlplant(ctypes.c_void_p(x.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(self.fi_flag))    
+        
+        xdot[12:18] = temp
+        
+        return xdot
         
     def step(self, action):
         
@@ -44,15 +148,22 @@ class F16_env(gym.Env, F16_sim.F16_sim):
         self.t += self.dt
         
         reward = 1
-        isdone = 0
+        isdone = False
+        info = {'fidelity':'high'}
         
-        return self.x, reward, isdone, {}
+        return self.get_obs(), reward, isdone, info
+    
+    def get_obs(self):
+        
+        return  np.array(list(self.x[i] for i in range(17)), dtype='float32')
     
     def reset(self):
         
         self.x = x0
         self.u = x0[12:16]
         self.t = 0
+        
+        return self.get_obs()
     
     def _trim_obj_func(self, UX0, h, V):
               
@@ -182,63 +293,12 @@ class F16_env(gym.Env, F16_sim.F16_sim):
         
         return A, B, C, D
     
-# exit()
     
-# model = F16_env(x0,paras_sim)
-# A,B,C,D = model.linearise()
+model = F16_env(x0,paras_sim)
 
-# model.trim(10000,700)
+check_env(model, warn=True)
 
-# A,B,C,D = model.linearise()
+# env = DummyVecEnv([lambda: F16_env(x0, paras_sim)])
 
-# #exit()
-
-# rng = np.linspace(paras_sim[1], paras_sim[2], int((paras_sim[2]-paras_sim[1])/paras_sim[0]))
-# output_vars = [6,7,8,9,10,11]
-
-# # create storage
-# x_storage = np.zeros([len(rng),len(model.x)])
-# A = np.zeros([len(model.x),len(model.x),len(rng)])
-# B = np.zeros([len(model.x),len(model.u),len(rng)])
-# C = np.zeros([len(model.measured_states),len(model.x),len(rng)])
-# D = np.zeros([len(model.measured_states),len(model.u),len(rng)])
-
-# bar = progressbar.ProgressBar(maxval=len(rng)).start()
-
-# tic()
-
-# for idx, val in enumerate(rng):
-    
-#     #----------------------------------------#
-#     #------------linearise model-------------#
-#     #----------------------------------------#
-    
-#     # the object oriented linearisation function is about 10x slower than the functional programming one
-#     [A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = model.linearise()
-#     #[A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = linearise(model.x, model.u, model.measured_states, model.paras_sim[4], model._nlplant)
-    
-#     #----------------------------------------#
-#     #--------------Take Action---------------#
-#     #----------------------------------------#
-    
-#     # MPC prediction using squiggly C and M matrices
-#     #CC, MM = calc_MC(paras_mpc[0], A[:,:,idx], B[:,:,idx], time_step)
-    
-    
-#     #----------------------------------------#
-#     #--------------Integrator----------------#
-#     #----------------------------------------#    
-    
-#     x = model.step(model.u)
-    
-#     #----------------------------------------#
-#     #------------Store History---------------#
-#     #----------------------------------------#
-    
-#     x_storage[idx,:] = x
-    
-#     bar.update(idx)
-    
-# toc()
-    
-# vis(x_storage, rng)
+model = A2C('MlpPolicy', model, verbose = 1)
+# model.learn(total_timesteps=10000)

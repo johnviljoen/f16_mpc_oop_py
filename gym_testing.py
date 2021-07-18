@@ -304,60 +304,62 @@ class F16_env(gym.Env):
     
 
 
-model = F16_env(act_lim, x_lim, x0, paras_sim, paras_mpc)
-model.trim(10000,700)
 
-A,B,C,D = model.linearise()
 
-#exit()
+# model = F16_env(act_lim, x_lim, x0, paras_sim, paras_mpc)
+# model.trim(10000,700)
 
-rng = np.linspace(paras_sim[1], paras_sim[2], int((paras_sim[2]-paras_sim[1])/paras_sim[0]))
-output_vars = [6,7,8,9,10,11]
+# A,B,C,D = model.linearise()
 
-# create storage
-x_storage = np.zeros([len(rng),len(model.x)])
-A = np.zeros([len(model.x),len(model.x),len(rng)])
-B = np.zeros([len(model.x),len(model.u),len(rng)])
-C = np.zeros([len(model.measured_states),len(model.x),len(rng)])
-D = np.zeros([len(model.measured_states),len(model.u),len(rng)])
+# #exit()
 
-bar = progressbar.ProgressBar(maxval=len(rng)).start()
+# rng = np.linspace(paras_sim[1], paras_sim[2], int((paras_sim[2]-paras_sim[1])/paras_sim[0]))
+# output_vars = [6,7,8,9,10,11]
 
-tic()
+# # create storage
+# x_storage = np.zeros([len(rng),len(model.x)])
+# A = np.zeros([len(model.x),len(model.x),len(rng)])
+# B = np.zeros([len(model.x),len(model.u),len(rng)])
+# C = np.zeros([len(model.measured_states),len(model.x),len(rng)])
+# D = np.zeros([len(model.measured_states),len(model.u),len(rng)])
 
-for idx, val in enumerate(rng):
+# bar = progressbar.ProgressBar(maxval=len(rng)).start()
+
+# tic()
+
+# for idx, val in enumerate(rng):
     
-    #----------------------------------------#
-    #------------linearise model-------------#
-    #----------------------------------------#
+#     #----------------------------------------#
+#     #------------linearise model-------------#
+#     #----------------------------------------#
     
-    # the object oriented linearisation function is about 10x slower than the functional programming one
-    # therefore it is commented out here and the functional one is implemented
-    #[A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = model.linearise()
-    [A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = linearise(model.x, model.u, model.measured_states, model.paras_sim[4], model._nlplant)
+#     # the object oriented linearisation function is about 10x slower than the functional programming one
+#     # therefore it is commented out here and the functional one is implemented
+#     #[A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = model.linearise()
+#     [A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = linearise(model.x, model.u, model.measured_states, model.paras_sim[4], model._nlplant)
     
-    #----------------------------------------#
-    #--------------Take Action---------------#
-    #----------------------------------------#
+#     #----------------------------------------#
+#     #--------------Take Action---------------#
+#     #----------------------------------------#
     
-    # MPC prediction using squiggly C and M matrices
-    #CC, MM = calc_MC(paras_mpc[0], A[:,:,idx], B[:,:,idx], time_step)
+#     # MPC prediction using squiggly C and M matrices
+#     #CC, MM = calc_MC(paras_mpc[0], A[:,:,idx], B[:,:,idx], time_step)
     
     
-    #----------------------------------------#
-    #--------------Integrator----------------#
-    #----------------------------------------#    
+#     #----------------------------------------#
+#     #--------------Integrator----------------#
+#     #----------------------------------------#    
     
-    x = model.step(model.u)
+#     x = model.step(model.u)
     
-    #----------------------------------------#
-    #------------Store History---------------#
-    #----------------------------------------#
+#     #----------------------------------------#
+#     #------------Store History---------------#
+#     #----------------------------------------#
     
-    x_storage[idx,:] = x
+#     x_storage[idx,:] = x
     
-    bar.update(idx)
+#     bar.update(idx)
     
-toc()
+# toc()
     
-vis(x_storage, rng)
+# vis(x_storage, rng)
