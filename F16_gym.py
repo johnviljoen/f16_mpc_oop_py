@@ -264,7 +264,7 @@ class F16_env(gym.Env):
     
     def linearise(self):
     
-        eps = 1e-06
+        eps = 1e-05
         
         A = np.zeros([len(self.x),len(self.x)])
         B = np.zeros([len(self.x),len(self.u)])
@@ -294,11 +294,13 @@ class F16_env(gym.Env):
         return A, B, C, D
     
     
-model = F16_env(x0,paras_sim)
+sim = F16_env(x0,paras_sim)
 
-check_env(model, warn=True)
+A,B,C,D = sim.linearise()
+
+check_env(sim, warn=True)
 
 # env = DummyVecEnv([lambda: F16_env(x0, paras_sim)])
 
-model = A2C('MlpPolicy', model, verbose = 1)
+model = A2C('MlpPolicy', sim, verbose = 1)
 # model.learn(total_timesteps=10000)
