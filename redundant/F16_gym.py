@@ -30,6 +30,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 from stable_baselines3.common.env_checker import check_env
 
+from numba import jit
+
 class F16_env(gym.Env):
     
     metadata = {'render.modes': ['human']}
@@ -57,40 +59,35 @@ class F16_env(gym.Env):
         self.measured_states = [2,6,7,8,9,10,11]
         self.t = 0
         
-    @staticmethod
-    def upd_thrust(T_cmd, T_state):
+    def upd_thrust(self, T_cmd, T_state):
         # command saturation
         T_cmd = np.clip(T_cmd,act_lim[1][0],act_lim[0][0])
         # rate saturation
         T_err = np.clip(T_cmd - T_state, -10000, 10000)
         return T_err
     
-    @staticmethod
-    def upd_dstab(dstab_cmd, dstab_state):
+    def upd_dstab(self, dstab_cmd, dstab_state):
         # command saturation
         dstab_cmd = np.clip(dstab_cmd,act_lim[1][1],act_lim[0][1])
         # rate saturation
         dstab_err = np.clip(20.2*(dstab_cmd - dstab_state), -60, 60)
         return dstab_err
     
-    @staticmethod
-    def upd_ail(ail_cmd, ail_state):
+    def upd_ail(self, ail_cmd, ail_state):
         # command saturation
         ail_cmd = np.clip(ail_cmd,act_lim[1][2],act_lim[0][2])
         # rate saturation
         ail_err = np.clip(20.2*(ail_cmd - ail_state), -80, 80)
         return ail_err
     
-    @staticmethod
-    def upd_rud(rud_cmd, rud_state):
+    def upd_rud(self, rud_cmd, rud_state):
         # command saturation
         rud_cmd = np.clip(rud_cmd,act_lim[1][3],act_lim[0][3])
         # rate saturation
         rud_err = np.clip(20.2*(rud_cmd - rud_state), -120, 120)
         return rud_err
     
-    @staticmethod
-    def upd_lef(h, V, coeff, alpha, lef_state_1, lef_state_2, nlplant):
+    def upd_lef(self, h, V, coeff, alpha, lef_state_1, lef_state_2, nlplant):
         
         nlplant.atmos(ctypes.c_double(h),ctypes.c_double(V),ctypes.c_void_p(coeff.ctypes.data))
         atmos_out = coeff[1]/coeff[2] * 9.05
