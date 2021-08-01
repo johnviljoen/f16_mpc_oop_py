@@ -368,4 +368,59 @@ class F16(gym.Env):
             vis(x_storage, rng)
         
         return x_storage
+    
+    def calc_MPC_action(self, p_dem, q_dem, r_dem):
+        
+        """ Function to calculate the optimal control action to take to achieve 
+        demanded p, q, r, states using a model predictive control technique.
+        
+        Args:
+            p_dem:
+                float scalar value, the demanded roll rate in deg/s
+            q_dem:
+                float scalar value, the demanded pitch rate in deg/s
+            r_dem:
+                float scalar value, the demanded yaw rate in deg/s
+                
+        Returns:
+            dh:
+                float scalar value, the optimal horizontal stabilator demand in deg
+            da:
+                float scalar value, the optimal aileron demand in deg
+            dr:
+                float scalar value, the optimal rudder demand in deg
+        """
+        
+        def calc_MC(hzn, A, B, dt):
+    
+            # hzn is the horizon
+            nstates = A.shape[0]
+            ninputs = B.shape[1]
+            
+            # x0 is the initial state vector of shape (nstates, 1)
+            # u is the matrix of input vectors over the course of the prediction of shape (ninputs,horizon)
+            
+            # initialise CC, MM, Bz
+            CC = np.zeros([nstates*hzn, ninputs*hzn])
+            MM = np.zeros([nstates*hzn, nstates])
+            Bz = np.zeros([nstates, ninputs])
+            
+            for i in range(hzn):
+                MM[nstates*i:nstates*(i+1),:] = np.linalg.matrix_power(A,i+1) * dt ** (i+1)
+                for j in range(hzn):
+                    if i-j >= 0:
+                        CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = np.matmul(np.linalg.matrix_power(A,(i-j)),B) * dt ** (i-j+1)
+                    else:
+                        CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = Bz
+        
+            return MM, CC
+        
+        
+        
+        dh, da, dr = 0, 0, 0
+        
+        return dh, da, dr
+        
+        
+        
         
