@@ -16,13 +16,9 @@ import ctypes
 from ctypes import CDLL
 import os
 import progressbar
-from stable_baselines3.common.env_checker import check_env
-from sys import exit
 
 # custom files
 from parameters import act_lim, x_lim
-from parameters import initial_state_vector_ft_rad as x0
-from parameters import simulation_parameters as paras_sim
 from utils import tic, toc, vis
 
 class F16(gym.Env):
@@ -45,6 +41,8 @@ class F16(gym.Env):
         self.fi_flag = paras_sim[4]
         # time step
         self.dt = paras_sim[0]
+        self.time_start = paras_sim[1]
+        self.time_end = paras_sim[2]
         
         self.xdot = np.zeros([x0.shape[0]])
         
@@ -160,9 +158,38 @@ class F16(gym.Env):
         return self.get_obs(self.x, self.u)
         
     def get_obs(self, x, u):
-        return np.copy(np.array(list(self.x[i] for i in self.y_vars), dtype='float32').flatten())
+        
+        """ Function for acquiring the current observation from the state space.
+        
+        Args:
+            x -> the state vector
+            of form numpy 2D array (vertical vector)
+            
+        Returns:
+            y -> system output
+            of form numpy 1D array to match gym requirements
+        """
+        
+        return np.copy(np.array(list(x[i] for i in self.y_vars), dtype='float32').flatten())
         
     def trim(self, h_t, v_t):
+        
+        """ Function for trimming the aircraft in straight and level flight. The objective
+        function is built to be the same as that of the MATLAB version of the Nguyen 
+        simulation.
+        
+        Args:
+            h_t:
+                altitude above sea level in ft, float
+            v_t:
+                airspeed in ft/s, float
+                
+        Returns:
+            x_trim:
+                trim state vector, 1D numpy array
+            opt:
+                scipy.optimize.minimize output information
+        """
         
         def obj_func(UX0, h_t, v_t, fi_flag, nlplant):
     
@@ -243,6 +270,19 @@ class F16(gym.Env):
         
     def linearise(self, x, u):
         
+        """ Function to linearise the aircraft at a given state vector and input demand.
+        This is done by perturbing each state and measuring its effect on every other state.
+        
+        Args:
+            x:
+                state vector, 2D numpy array (vertical vector)
+            u:
+                input vector, 2D numpy array (vertical vector)
+                
+        Returns:
+            4 2D numpy arrays, representing the 4 state space matrices, A,B,C,D.
+        """
+        
         eps = 1e-06
         
         A = np.zeros([len(x),len(x)])
@@ -268,73 +308,64 @@ class F16(gym.Env):
             B[:, i] = (self.calc_xdot(x, u + du)[:,0] - self.calc_xdot(x, u)[:,0]) / eps
             D[:, i] = (self.get_obs(x, u + du)[:,0] - self.get_obs(x, u)[:,0]) / eps
         
-        return A, B, C, D        
+        return A, B, C, D      
+    
+    def validate_sim(self, x0, visualise=True):
         
-# # make starting array immutable to cause error if used innapropriately
-# x0.flags.writeable = False
+        """ Function which simulates a brief time history of the simulation to ensure
+        behaviour is still accurate/consistent. Input demands are assumed to be constant
+        and the simulation is initialised at the input argument x0
+        
+        Args:
+            x0:
+                initial state vector, 2D numpy array (vertical vector)
+        
+        Returns:
+            x_storage:
+                timehistory sequence of state vectors, 2D numpy array
+        """
+        
+        # setup sequence of time
+        rng = np.linspace(self.time_start, self.time_end, int((self.time_end-self.time_start)/self.dt))
 
-# # instantiate the object
-# f16 = F16(x0, x0[12:16], paras_sim)
+        # create storage
+        x_storage = np.zeros([len(rng),len(self.x)])
+        
+        # begin progressbar
+        bar = progressbar.ProgressBar(maxval=len(rng)).start()
+        
+        self.x = x0
+        
+        # begin timer
+        tic()
+        
+        for idx, val in enumerate(rng):
+            
+            #------------linearise model-------------#            
+            #[A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = self.linearise(self.x, self.u)
+            
+            #--------------Take Action---------------#
+            # MPC prediction using squiggly C and M matrices
+            #CC, MM = calc_MC(paras_mpc[0], A[:,:,idx], B[:,:,idx], time_step)
+            
+            #--------------Integrator----------------#            
+            self.step(self.u)
+            
+            #------------Store History---------------#
+            x_storage[idx,:] = self.x[:,0]
+            
+            #---------Update progressbar-------------#
+            bar.update(idx)
+        
+        # finish timer
+        toc()
+        
+        if visualise:
+            # run this in spyder terminal to have plots appear in standalone windows
+            # %matplotlib qt
 
-# # trim the aircraft at 10000ft, 700 ft/s
-# f16.x = f16.trim(10000,700)[0][np.newaxis].T
-# f16.u = f16.x[12:16]
-
-# check_env(f16, warn=True)
-
-
-# rng = np.linspace(paras_sim[1], paras_sim[2], int((paras_sim[2]-paras_sim[1])/paras_sim[0]))
-
-# # create storage
-# x_storage = np.zeros([len(rng),len(f16.x)])
-# A = np.zeros([len(f16.x),len(f16.x),len(rng)])
-# B = np.zeros([len(f16.x),len(f16.u),len(rng)])
-# C = np.zeros([len(f16.y_vars),len(f16.x),len(rng)])
-# D = np.zeros([len(f16.y_vars),len(f16.u),len(rng)])
-
-# bar = progressbar.ProgressBar(maxval=len(rng)).start()
-
-# tic()
-
-# for idx, val in enumerate(rng):
-    
-#     #----------------------------------------#
-#     #------------linearise model-------------#
-#     #----------------------------------------#
-    
-#     [A[:,:,idx], B[:,:,idx], C[:,:,idx], D[:,:,idx]] = f16.linearise(f16.x, f16.u)
-    
-#     #----------------------------------------#
-#     #--------------Take Action---------------#
-#     #----------------------------------------#
-    
-#     # MPC prediction using squiggly C and M matrices
-#     #CC, MM = calc_MC(paras_mpc[0], A[:,:,idx], B[:,:,idx], time_step)
-    
-    
-#     #----------------------------------------#
-#     #--------------Integrator----------------#
-#     #----------------------------------------#    
-    
-#     x = f16.step(f16.u)
-    
-#     #----------------------------------------#
-#     #------------Store History---------------#
-#     #----------------------------------------#
-    
-#     x_storage[idx,:] = x[:,0]
-    
-#     bar.update(idx)
-
-# toc()
-
-# # In[]
-
-# #----------------------------------------------------------------------------#
-# #---------------------------------Visualise----------------------------------#
-# #----------------------------------------------------------------------------#
-
-# #%matplotlib qt
-
-# vis(x_storage, rng)
-
+            # create plots for all states timehistories
+            vis(x_storage, rng)
+        
+        return x_storage
+        

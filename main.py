@@ -17,8 +17,22 @@ from stable_baselines3 import A2C
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.policies import ActorCriticPolicy
 
+from stable_baselines3.common.env_checker import check_env
+
+from sys import exit
+
+f16 = F16(x0, x0[12:16], paras_sim)
+
+f16.validate_sim(f16.x0)
+
+
+check_env(f16, warn=True)
+
+exit()
+
+
 env = DummyVecEnv([lambda: F16(x0, x0[12:16], paras_sim)])
 
 model = A2C('MlpPolicy', env, verbose=1)
 
-model.learn(total_timesteps=100)
+# model.learn(total_timesteps=100)
