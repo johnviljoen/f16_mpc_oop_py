@@ -16,6 +16,7 @@ import ctypes
 from ctypes import CDLL
 import os
 import progressbar
+from scipy.signal import cont2discrete
 
 # custom files
 from parameters import act_lim, x_lim
@@ -376,10 +377,10 @@ class F16(gym.Env):
         
         return x_storage
     
-    def calc_MPC_action(self, p_dem, q_dem, r_dem):
+    def calc_MPC_action(self, p_dem, q_dem, r_dem, paras_mpc):
         
         """ Function to calculate the optimal control action to take to achieve 
-        demanded p, q, r, states using a model predictive control technique.
+        demanded p, q, r, states using a dual model predictive control technique.
         
         Args:
             p_dem:
@@ -440,7 +441,38 @@ class F16(gym.Env):
                         
             return matomats
         
+        """ The first step to MPC is generating a prediction of subsequent time steps.
+        This is done by linearising the system, converting this to a discrete system
+        and then generating 2 large matrices which encapsulate future time steps 
+        up to the 'horizon'. This is done in 'calc_MC'."""
         
+        # find continuous linearised state space model
+        A_c, B_c, C_c, D_c = self.linearise(self.x, self.u)
+        
+        # convert to discrete state spce model
+        A_d, B_d, C_d, D_d = cont2discrete((A_c, B_c, C_c, D_c), self.dt)[0:4]
+        
+        # calculate MM, CC
+        MM, CC = calc_MC(paras_mpc[0], A_d, B_d, self.dt)
+        
+        """ Now we must calculate the LQ optimal gain matrix, K. This is done with
+        a cost function, determined by 2 matrices: Q and R. Q is chosen to be C_d.T C_d
+        although this could be eye. Q chooses the weightings of each state and so
+        we can manipulate each states influence on the cost function here. R is"""
+        
+        Q = np.matmul(C_d.T,C_d)
+        
+        
+        """ Now we must calculate the terminal weighting matrix for the full system
+        . This matrix allows the finite horizon optimisation to also optimise for the 
+        infinite horizon case, where the system is under control of the LQ optimal
+        control law."""
+        
+        
+        """ Finally we must find the Q_bar matrix by combining a diagonal matrix 
+        of Q matrices with the terminal gain matrix as its final element. This
+        then allows us to find the optimal sequence of inputs over the horizon
+        of which the first is chosen as the optimal control action for this timestep."""
         
         dh, da, dr = 0, 0, 0
         
