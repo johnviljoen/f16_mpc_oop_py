@@ -15,9 +15,6 @@ from parameters import simulation_parameters as paras_sim
 from control.matlab import *
 from parameters import act_lim, x_lim
 
-
-
-
 class test_F16(unittest.TestCase, F16):
     
     def __init__(self, x0, u0, paras_sim):
@@ -31,6 +28,7 @@ class test_F16(unittest.TestCase, F16):
         
         The model is first order and so it is also simple to test the command
         and rate saturations to ensure accuracy"""
+        pass
         
         
         
@@ -53,6 +51,8 @@ class test_F16(unittest.TestCase, F16):
         at their maximums and minimums and they are commanded to go beyond them.
         The test is successful if and only if their rate of change is found to be
         zero"""
+        
+        self.reset()
         
         # set command 1000 below the minimum
         self.u[0] = act_lim[1][0] - 1000
@@ -111,11 +111,42 @@ class test_F16(unittest.TestCase, F16):
         
     def test_act_rate_lims(self):
         
+        """ Function to test the rate limits of the 1st order actuators is behaving as 
+        expected. Note this does not include the engine as it is a more complex system."""
+        
+        # begin from rough trim
+        self.reset()
+        
+        # command maximums on all actuators
+        self.u[1] = act_lim[0][1]
+        self.u[2] = act_lim[0][2]
+        self.u[3] = act_lim[0][3]
+        
+        xdot = self.calc_xdot(self.x, self.u)
+        
+        self.assertAlmostEqual(xdot[13], 60)
+        self.assertAlmostEqual(xdot[14], 80)
+        self.assertAlmostEqual(xdot[15], 120)
+        
+        self.reset()
+                        
+        # now test the inverse
+        self.u[1] = act_lim[1][1]
+        self.u[2] = act_lim[1][2]
+        self.u[3] = act_lim[1][3]
+                
+        xdot = self.calc_xdot(self.x, self.u)
+
+        self.assertAlmostEqual(xdot[13], -60)
+        self.assertAlmostEqual(xdot[14], -80)
+        self.assertAlmostEqual(xdot[15], -120)
+        
+    def test_aerodynamics(self):
+        
         pass
-        
-        
-        # return xdot
     
+    
+                    
     
 test_f16 = test_F16(x0, x0[12:16], paras_sim)
-test_f16.test_act_cmd_lims()
+test_f16.test_act_rate_lims()

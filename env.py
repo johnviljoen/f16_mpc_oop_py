@@ -304,7 +304,7 @@ class F16(gym.Env):
             dx[i] = eps
             
             A[:, i] = (self.calc_xdot(x + dx, u)[:,0] - self.calc_xdot(x, u)[:,0]) / eps
-            C[:, i] = (self.get_obs(x + dx, u)[:,0] - self.get_obs(x, u)[:,0]) / eps
+            C[:, i] = (self.get_obs(x + dx, u) - self.get_obs(x, u)) / eps
             
         # Perturb each of the input variables and compute linearization
         for i in range(len(u)):
@@ -313,11 +313,11 @@ class F16(gym.Env):
             du[i] = eps
                     
             B[:, i] = (self.calc_xdot(x, u + du)[:,0] - self.calc_xdot(x, u)[:,0]) / eps
-            D[:, i] = (self.get_obs(x, u + du)[:,0] - self.get_obs(x, u)[:,0]) / eps
+            D[:, i] = (self.get_obs(x, u + du) - self.get_obs(x, u)) / eps
         
         return A, B, C, D      
     
-    def validate_sim(self, x0, visualise=True):
+    def sim(self, x0, visualise=True):
         
         """ Function which simulates a brief time history of the simulation to ensure
         behaviour is still accurate/consistent. Input demands are assumed to be constant
@@ -421,6 +421,24 @@ class F16(gym.Env):
                         CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = Bz
         
             return MM, CC
+        
+        def dmom(mat, num_mats):
+            
+            # function to create a diagonal matrix of matrices -> dmom
+            
+            # dimension extraction
+            nrows = mat.shape[0]
+            ncols = mat.shape[1]
+            
+            # matrix of matrices matomats -> I thought it sounded cool
+            matomats = np.zeros((nrows*num_mats,ncols*num_mats))
+            
+            for i in range(num_mats):
+                for j in range(num_mats):
+                    if i == j:
+                        matomats[nrows*i:nrows*(i+1),ncols*j:ncols*(j+1)] = mat
+                        
+            return matomats
         
         
         
