@@ -44,7 +44,9 @@ class F16(gym.Env):
         self.time_start = paras_sim[1]
         self.time_end = paras_sim[2]
         
-        self.xdot = np.zeros([x0.shape[0]])
+        self.lim = np.append(np.array(x_lim).T, np.array(act_lim).T, axis=0)
+        
+        # self.xdot = np.zeros([x0.shape[0]])
         
         # create interface with c shared library .so file in folder "C"
         if paras_sim[3] == 1:
@@ -146,6 +148,11 @@ class F16(gym.Env):
         return xdot
         
     def step(self, action):
+        
+        # def check_bounds(x):
+            
+            # if x < self.lim[:,0]
+            
         self.x += self.calc_xdot(self.x, self.u)*self.dt
         reward = 1
         isdone = False
