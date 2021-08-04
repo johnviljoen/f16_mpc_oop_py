@@ -13,9 +13,39 @@ import time
 # import matplotlib for visualisation
 import matplotlib.pyplot as plt
 
-
+import numpy as np
 from numpy import pi
 
+# In[]
+
+def square_mat_degen_2d(mat, degen_idx):
+    
+    degen_mat = np.zeros([len(degen_idx),len(degen_idx)])
+    
+    for i in range(len(degen_idx)):
+        
+        degen_mat[:,i] = mat[degen_idx, [degen_idx[i] for x in range(len(degen_idx))]]
+        
+    return degen_mat
+
+# In[]
+
+def dmom(mat, num_mats):
+    # diagonal matrix of matrices -> dmom
+    
+    # dimension extraction
+    nrows = mat.shape[0]
+    ncols = mat.shape[1]
+    
+    # matrix of matrices matomats -> I thought it sounded cool
+    matomats = np.zeros((nrows*num_mats,ncols*num_mats))
+    
+    for i in range(num_mats):
+        for j in range(num_mats):
+            if i == j:
+                matomats[nrows*i:nrows*(i+1),ncols*j:ncols*(j+1)] = mat
+                
+    return matomats
 
 # In[]
 

@@ -103,7 +103,7 @@ lef_max         = 25            # (deg)
 
 simulation_parameters = [time_step, time_start, time_end, stab_flag, fi_flag]
 
-paras_mpc = [hzn, pred_dt]
+model_predictive_control_parameters = [hzn, pred_dt]
 
 m2f = 3.28084 # metres to feet conversion
 f2m = 1/m2f # feet to metres conversion
