@@ -453,9 +453,6 @@ class F16(gym.Env):
         although this could be eye. Q chooses the weightings of each state and so
         we can manipulate each states influence on the cost function here. R is """
         
-        
-        
-        
         Q = square_mat_degen_2d(C_d.T @ C_d, x_degen_idx)        
         R = np.eye(4)*0.1
             
@@ -488,8 +485,6 @@ class F16(gym.Env):
             K = np.matrix(scipy.linalg.inv(B.T @ P @ B+R) @ (B.T @ P @ A))
             return K
         
-        
-        
         K = dlqr(A_d_degen, B_d_degen, Q, R)
         
         evals, evecs = scipy.linalg.eig(A_d_degen - B_d_degen @ K)
@@ -503,23 +498,24 @@ class F16(gym.Env):
         
         Q_bar = scipy.linalg.solve_discrete_lyapunov((A_d_degen + np.matmul(B_d_degen, K)).T, Q + np.matmul(np.matmul(K.T,R), K))
         
-        # QQ = dmom(Q,paras_mpc[0])
-        # RR = dmom(R,paras_mpc[0])
+        QQ = dmom(Q,paras_mpc[0])
+        RR = dmom(R,paras_mpc[0])
         
-        return Q_bar
+        QQ[-A_d_degen.shape[0]:,-A_d_degen.shape[0]:] = Q_bar
+                
         
         """ Finally we must find the Q_bar matrix by combining a diagonal matrix 
         of Q matrices with the terminal gain matrix as its final element. This
         then allows us to find the optimal sequence of inputs over the horizon
         of which the first is chosen as the optimal control action for this timestep."""
         
-        # H = CC.T @ QQ @ CC + RR
-        # F = CC.T @ QQ @ MM
-        # G = MM.T @ QQ @ MM
+        H = CC.T @ QQ @ CC + RR
+        F = CC.T @ QQ @ MM
+        G = MM.T @ QQ @ MM
         
         # dh, da, dr = 0, 0, 0
         
-        # return dh, da, dr
+        return H, F, G
         
         
         

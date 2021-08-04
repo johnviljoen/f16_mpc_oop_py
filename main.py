@@ -28,7 +28,7 @@ from stable_baselines3.common.env_checker import check_env
 from sys import exit
 
 f16 = F16(x0, x0[12:16], paras_sim)
-Q_bar = f16.calc_MPC_action(0,0,0,paras_mpc)
+H,F,G = f16.calc_MPC_action(0,0,0,paras_mpc)
 
 # f16.sim(f16.x0)
 
