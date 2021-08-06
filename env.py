@@ -49,6 +49,14 @@ class F16(gym.Env):
         
         self.lim = np.append(np.array(x_lim).T, np.array(act_lim).T, axis=0)
         
+        # x_degen = {phi, theta, alpha, beta, p, q, r, dh, da, dr}, as we dont
+        # want to control every state
+        self.x_degen_idx = [3,4,7,8,9,10,11,13,14,15]
+        self.x_degen = np.array(list(list(self.x)[i] for i in self.x_degen_idx))
+        
+        self.u_degen_idx = [1,2,3]
+        self.u_degen = np.array(list(list(self.u)[i] for i in self.u_degen_idx))
+        
         # self.xdot = np.zeros([x0.shape[0]])
         
         # create interface with c shared library .so file in folder "C"
@@ -414,12 +422,10 @@ class F16(gym.Env):
         # convert to discrete state spce model
         A_d, B_d, C_d, D_d = cont2discrete((A_c, B_c, C_c, D_c), self.dt)[0:4]
         
-        # x_degen = {phi, theta, alpha, beta, p, q, r, dh, da, dr}, as we dont
-        # want to control every state
-        x_degen_idx = [3,4,7,8,9,10,11,13,14,15]
+
         
-        A_d_degen = square_mat_degen_2d(A_d, x_degen_idx)
-        B_d_degen = B_d[x_degen_idx,0:4]
+        A_d_degen = square_mat_degen_2d(A_d, self.x_degen_idx)
+        B_d_degen = B_d[self.x_degen_idx,1:4]
         
         def calc_MC(hzn, A, B, dt):
     
@@ -453,8 +459,8 @@ class F16(gym.Env):
         although this could be eye. Q chooses the weightings of each state and so
         we can manipulate each states influence on the cost function here. R is """
         
-        Q = square_mat_degen_2d(C_d.T @ C_d, x_degen_idx)        
-        R = np.eye(4)*0.1
+        Q = square_mat_degen_2d(C_d.T @ C_d, self.x_degen_idx)        
+        R = np.eye(3)*0.1
             
         # from https://github.com/python-control/python-control/issues/359:
         def dlqr(A,B,Q,R):
@@ -515,7 +521,71 @@ class F16(gym.Env):
         
         # dh, da, dr = 0, 0, 0
         
-        return H, F, G
+        """ Next we must incorporate constraints of the system into our optimisation"""
+        # A_ci = np.concatenate((CC,-CC), axis=0)
+        
+        def calc_A_ci(CC, hzn, stp):
+            nstates = int(CC.shape[0]/hzn)
+            A_ci = np.concatenate((CC[stp*nstates:(stp+1)*nstates,:], -CC[stp*nstates:(stp+1)*nstates,:]), axis=0)
+            return A_ci
+        
+        A_ci = calc_A_ci(CC,paras_mpc[0],3)
+        
+        np.array(list((x_lim[1] + act_lim[1])[i] for i in self.y_vars), dtype='float32')
+        
+        b_0_idx = self.x_degen_idx.copy()
+        x_degen_idx_2 = [i + len(self.x) - 1 for i in b_0_idx]
+        b_0_idx.extend(x_degen_idx_2)
+        b_0 = np.array(list(list(self.lim.flatten(order='F'))[i] for i in b_0_idx))
+        b_0[len(self.x_degen_idx):] = -b_0[len(self.x_degen_idx):]
+        b_0 = b_0[np.newaxis].T
+        
+        def calc_B_x(A_d_degen, stp):
+            return np.concatenate((-np.linalg.matrix_power(A_d_degen,stp),np.linalg.matrix_power(A_d_degen,stp)), axis=0)
+            
+        B_x = calc_B_x(A_d_degen,3)
+        
+        """ Now we have A_ci, b_0 and B_x """
+        u_test_seq = np.squeeze(np.array([self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4]]))
+
+        u_test_seq = u_test_seq.flatten()[np.newaxis].T
+        
+        obj_func_args = (H,self.x_degen,F)
+        cons_func_args = (A_ci,b_0,B_x,self.x_degen)
+        
+        def MPC_obj_func(u_seq, H, x, F):
+            # function to minimise
+            u_seq = u_seq.squeeze().flatten()
+            # H = args[0]
+            # x = args[1]
+            # F = args[2]
+            return (u_seq.T @ H @ u_seq + 2 * x.T @ F.T @ u_seq).flatten()
+                    
+        def MPC_cons_func(u_seq, A_ci, b_0, B_x, x):
+            
+            # A_ci = args[0]
+            # b_0 = args[1]
+            # B_x = args[2]
+            # x = args[3]
+            u_seq = u_seq[np.newaxis].T
+            # print('u_seq:', u_seq.shape)
+            # print('A_ci:', A_ci.shape)
+            # print('b_0:', b_0.shape)
+            # print('B_x:', B_x.shape)
+            # print('x:', x.shape)
+            
+            return (A_ci @ u_seq - b_0 - B_x @ x).flatten()
+                
+        cons = ({'type':'ineq', 'fun':MPC_cons_func, 'args':cons_func_args})
+        
+        # set initial guess:
+        u_seq0 = np.concatenate((self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen)).flatten()
+        # print('u_seq0:',u_seq0)
+        
+        
+        sol = minimize(MPC_obj_func, u_seq0, method='SLSQP', args=obj_func_args, constraints=cons)
+        
+        return sol, A_d_degen, B_d_degen
         
         
         
