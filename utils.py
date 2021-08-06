@@ -16,6 +16,54 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy import pi
 
+# In[ All expect u in vertical vector format, hzn as a scalar ]
+
+def gen_rate_lim_constr_mat(u, hzn):
+    
+    rate_lim_constr_mat = np.eye(len(u)*hzn)
+    
+    for i in range(len(u)*hzn):
+        if i >= len(u):
+            rate_lim_constr_mat[i,i-len(u)] = -1
+            
+    return rate_lim_constr_mat
+
+def gen_rate_lim_constr_upper_lower(u, hzn, lower_limits, upper_limits):
+    
+    rlcl = np.zeros([len(u)*hzn,1])
+    rlcu = np.zeros([len(u)*hzn,1])
+    
+    rlcl[0:len(u),0] = -np.infty
+    rlcu[0:len(u),0] = np.infty
+    
+    for i in range(hzn):
+        if i >= 1:
+            for j in range(len(u)):
+                rlcl[len(u)*i+j,0] = lower_limits[j]
+                rlcu[len(u)*i+j,0] = upper_limits[j]
+            
+    return rlcl, rlcu
+    
+def gen_cmd_sat_constr_mat(u, hzn):
+    
+    return dmom(np.eye(len(u)), hzn)
+
+def gen_cmd_sat_constr_upper_lower(u, hzn, lower_limits, upper_limits):
+    
+    cscl = np.zeros([len(u)*hzn,1])
+    cscu = np.zeros([len(u)*hzn,1])
+    
+    for i in range(hzn):
+        for j in range(len(u)):
+            cscl[len(u)*i + j,0] = lower_limits[j]
+            cscu[len(u)*i + j,0] = upper_limits[j]
+            
+    return cscl, cscu
+
+def gen_OSQP_A(CC, cscm, rlcm):
+    return np.concatenate((CC, cscm, rlcm), axis=0)
+    
+
 # In[]
 
 def square_mat_degen_2d(mat, degen_idx):
@@ -29,6 +77,8 @@ def square_mat_degen_2d(mat, degen_idx):
     return degen_mat
 
 # In[]
+
+
 
 def dmom(mat, num_mats):
     # diagonal matrix of matrices -> dmom

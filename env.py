@@ -482,7 +482,7 @@ class F16(gym.Env):
               A_d, B_d, Q, R  -> all numpy arrays  (simple float number not allowed)
               
             Returns:
-              K: state feedback gain        
+              K: state feedback gain
             
             """
             # first, solve the ricatti equation
@@ -555,19 +555,20 @@ class F16(gym.Env):
         
         def MPC_obj_func(u_seq, H, x, F):
             # function to minimise
-            u_seq = u_seq.squeeze().flatten()
+            u_seq = u_seq.squeeze()[np.newaxis].T
+            
             # H = args[0]
             # x = args[1]
             # F = args[2]
             return (u_seq.T @ H @ u_seq + 2 * x.T @ F.T @ u_seq).flatten()
-                    
+        
+        
         def MPC_cons_func(u_seq, A_ci, b_0, B_x, x):
             
-            # A_ci = args[0]
-            # b_0 = args[1]
-            # B_x = args[2]
-            # x = args[3]
+            # must recieve u_seq that is 1D
+            
             u_seq = u_seq[np.newaxis].T
+            print('u_seq:', u_seq.shape)
             # print('u_seq:', u_seq.shape)
             # print('A_ci:', A_ci.shape)
             # print('b_0:', b_0.shape)
@@ -579,13 +580,13 @@ class F16(gym.Env):
         cons = ({'type':'ineq', 'fun':MPC_cons_func, 'args':cons_func_args})
         
         # set initial guess:
-        u_seq0 = np.concatenate((self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen)).flatten()
+        u_seq0 = 1.1 * np.concatenate((self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen)).flatten()
         # print('u_seq0:',u_seq0)
         
         
         sol = minimize(MPC_obj_func, u_seq0, method='SLSQP', args=obj_func_args, constraints=cons)
         
-        return sol, A_d_degen, B_d_degen
+        return sol, u_seq0, MPC_obj_func(u_test_seq, H, self.x_degen, F), MPC_cons_func(u_test_seq, A_ci, b_0, B_x, self.x_degen)
         
         
         
