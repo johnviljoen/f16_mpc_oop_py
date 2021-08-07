@@ -19,10 +19,14 @@ import progressbar
 from scipy.signal import cont2discrete
 import scipy
 from numpy.linalg import eigvals
+import osqp
+from scipy.sparse import csc_matrix
 
 # custom files
 from parameters import act_lim, x_lim
-from utils import tic, toc, vis, dmom, square_mat_degen_2d, dlqr, calc_MC
+from utils import tic, toc, vis, dmom, square_mat_degen_2d, gen_rate_lim_constr_mat, \
+    gen_rate_lim_constr_upper_lower, gen_cmd_sat_constr_mat, gen_cmd_sat_constr_upper_lower, \
+        gen_OSQP_A, dlqr, calc_MC
 
 class F16(gym.Env):
     
@@ -386,6 +390,43 @@ class F16(gym.Env):
             vis(x_storage, rng)
         
         return x_storage
+    
+    def calc_MPC_action_mk2(self, p_dem, q_dem, r_dem, paras_mpc):
+        hzn = paras_mpc[0]
+        A,B,C,D = self.linearise(self.x, self.u)
+        A,B,C,D = cont2discrete((A,B,C,D), self.dt)[0:4]
+        A_degen = square_mat_degen_2d(A, self.x_degen_idx)
+        B_degen = B[self.x_degen_idx,1:4]
+        cscm = gen_cmd_sat_constr_mat(self.u_degen, hzn)
+        rlcm = gen_rate_lim_constr_mat(self.u_degen,hzn)
+        MM, CC = calc_MC(hzn, A_degen, B_degen, self.dt)
+        OSQP_A = gen_OSQP_A(CC, cscm, rlcm)
+        #
+        Q = square_mat_degen_2d(C.T @ C, self.x_degen_idx)        
+        R = np.eye(3)*0.1
+        K = dlqr(A_degen, B_degen, Q, R)
+        Q_bar = scipy.linalg.solve_discrete_lyapunov((A_degen + np.matmul(B_degen, K)).T, Q + np.matmul(np.matmul(K.T,R), K))
+        QQ = dmom(Q,hzn)
+        RR = dmom(R,hzn)
+        QQ[-A_degen.shape[0]:,-A_degen.shape[0]:] = Q_bar
+        H = CC.T @ QQ @ CC + RR
+        F = CC.T @ QQ @ MM
+        G = MM.T @ QQ @ MM
+        x_u = np.array(list(list(self.lim.flatten(order='F'))[i] for i in self.x_degen_idx))[np.newaxis].T
+        x_l = np.array(list(list(self.lim.flatten(order='F'))[i] for i in [i + 17 for i in self.x_degen_idx]))[np.newaxis].T
+        u1 = np.concatenate(([x_u - A_degen @ self.x_degen] * hzn))
+        l1 = np.concatenate(([x_l - A_degen @ self.x_degen] * hzn))
+        cscl, cscu = gen_cmd_sat_constr_upper_lower(self.u_degen, hzn, self.lim[13:16,1], self.lim[13:16,0])
+        rlcl, rlcu = gen_rate_lim_constr_upper_lower(self.u_degen, hzn, [-60, -80, -120], [60, 80, 120])
+        OSQP_l = np.concatenate((l1, cscl, rlcl))
+        OSQP_u = np.concatenate((u1, cscu, rlcu))
+        #
+        P = 2*H
+        q = (2 * self.x_degen.T @ F.T).T
+        m = osqp.OSQP()
+        m.setup(P=csc_matrix(P), q=q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False)
+        res = m.solve()
+        return res.x[0:len(self.u_degen)][np.newaxis].T
     
     def calc_MPC_action(self, p_dem, q_dem, r_dem, paras_mpc):
         
