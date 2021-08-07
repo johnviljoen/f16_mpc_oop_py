@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from numpy import pi
 
+import scipy
+
 # In[ All expect u in vertical vector format, hzn as a scalar ]
 
 def gen_rate_lim_constr_mat(u, hzn):
@@ -65,6 +67,61 @@ def gen_OSQP_A(CC, cscm, rlcm):
     
 
 # In[]
+def calc_MC(hzn, A, B, dt):
+
+    # hzn is the horizon
+    nstates = A.shape[0]
+    ninputs = B.shape[1]
+    
+    # x0 is the initial state vector of shape (nstates, 1)
+    # u is the matrix of input vectors over the course of the prediction of shape (ninputs,horizon)
+    
+    # initialise CC, MM, Bz
+    CC = np.zeros([nstates*hzn, ninputs*hzn])
+    MM = np.zeros([nstates*hzn, nstates])
+    Bz = np.zeros([nstates, ninputs])
+    
+    for i in range(hzn):
+        MM[nstates*i:nstates*(i+1),:] = np.linalg.matrix_power(A,i+1) * dt ** (i+1)
+        for j in range(hzn):
+            if i-j >= 0:
+                CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = np.matmul(np.linalg.matrix_power(A,(i-j)),B) * dt ** (i-j+1)
+            else:
+                CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = Bz
+
+    return MM, CC
+
+# In[]
+# from https://github.com/python-control/python-control/issues/359:
+def dlqr(A,B,Q,R):
+    """
+    Solve the discrete time lqr controller.
+    x[k+1] = A x[k] + B u[k]
+    cost = sum x[k].T*Q*x[k] + u[k].T*R*u[k]
+    
+    
+    Discrete-time Linear Quadratic Regulator calculation.
+    State-feedback control  u[k] = -K*(x_ref[k] - x[k])
+    select the states that you want considered and make x[k] the difference
+    between the current x and the desired x.
+      
+    How to apply the function:    
+        K = dlqr(A_d,B_d,Q,R)
+      
+    Inputs:
+      A_d, B_d, Q, R  -> all numpy arrays  (simple float number not allowed)
+      
+    Returns:
+      K: state feedback gain
+    
+    """
+    # first, solve the ricatti equation
+    P = np.matrix(scipy.linalg.solve_discrete_are(A, B, Q, R))
+    # compute the LQR gain
+    K = np.matrix(scipy.linalg.inv(B.T @ P @ B+R) @ (B.T @ P @ A))
+    return K
+
+# In[]
 
 def square_mat_degen_2d(mat, degen_idx):
     
@@ -78,7 +135,10 @@ def square_mat_degen_2d(mat, degen_idx):
 
 # In[]
 
-
+# def gmim(mat, submat_dims):
+#     # get matrix in matrix -> gmim
+    
+#     mat[]
 
 def dmom(mat, num_mats):
     # diagonal matrix of matrices -> dmom
