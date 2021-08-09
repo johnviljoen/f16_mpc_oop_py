@@ -42,9 +42,10 @@ class F16(gym.Env):
         self.u0 = np.copy(u0[np.newaxis].T)
         # output state indices
         self.y_vars = [6,7,8,9,10,11]
+        self.y_vars_na = [6,7,8,9,10,11]
         # measured state indices
         self.z_vars = [6,7,8,9]
-        # fidelity flGag
+        # fidelity flag
         self.fi_flag = paras_sim[4]
         # time step
         self.dt = paras_sim[0]
@@ -57,9 +58,13 @@ class F16(gym.Env):
         # want to control every state
         self.x_degen_idx = [3,4,7,8,9,10,11,13,14,15]
         self.x_degen = np.array(list(list(self.x)[i] for i in self.x_degen_idx))
+        self.x0_degen = np.array(list(list(self.x0)[i] for i in self.x_degen_idx))
         
         self.u_degen_idx = [1,2,3]
         self.u_degen = np.array(list(list(self.u)[i] for i in self.u_degen_idx))
+        
+        # no actuator x :)
+        self.x_na = np.copy(np.concatenate((self.x[0:12,:],self.x[16:17,:],self.x[15:16])))
         
         # self.xdot = np.zeros([x0.shape[0]])
         
@@ -79,16 +84,72 @@ class F16(gym.Env):
         
         np.array(list((x_lim[1] + act_lim[1])[i] for i in self.y_vars), dtype='float32')
         
+    def calc_xdot_na(self, x, u):
+        
+        """ calculates, and returns the rate of change of the state vector, x, using the empirical
+        aerodynamic data held in folder 'C', and the equations of motion found in the
+        shared library C file. This function ignores engine, dh, da, dr actuator models.
+        
+        Args:
+            x:
+                numpy 2D array (vertical vector) of 14 elements
+                {xe,ye,h,phi,theta,psi,V,alpha,beta,p,q,r,lf1,lf2}
+            u:
+                numpy 2D array (vertical vector) of 4 elements
+                {T,dh,da,dr}
+    
+        Returns:
+            xdot:
+                numpy 2D array (vertical vector) of 14 elements
+                time derivatives of {xe,ye,h,phi,theta,psi,V,alpha,beta,p,q,r,lf1,lf2}
+        """        
+        
+        def upd_lef(h, V, coeff, alpha, lef_state_1, lef_state_2, nlplant):
+            
+            nlplant.atmos(ctypes.c_double(h),ctypes.c_double(V),ctypes.c_void_p(coeff.ctypes.data))
+            atmos_out = coeff[1]/coeff[2] * 9.05
+            alpha_deg = alpha*180/pi
+            
+            LF_err = alpha_deg - (lef_state_1 + (2 * alpha_deg))
+            #lef_state_1 += LF_err*7.25*time_step
+            LF_out = (lef_state_1 + (2 * alpha_deg)) * 1.38
+            
+            lef_cmd = LF_out + 1.45 - atmos_out
+            
+            # command saturation
+            lef_cmd = np.clip(lef_cmd,act_lim[1][4],act_lim[0][4])
+            # rate saturation
+            lef_err = np.clip((1/0.136) * (lef_cmd - lef_state_2),-25,25)
+            
+            return LF_err*7.25, lef_err
+        
+        # initialise variables
+        xdot = np.zeros([18,1])
+        coeff = np.zeros(3)
+        C_input_x = np.zeros(18)
+
+        #--------leading edge flap model---------#
+        lf_state1_dot, lf_state2_dot = upd_lef(x[2], x[6], coeff, x[7], x[12], x[13], self.nlplant)
+        #----------run nlplant for xdot----------#
+        
+        # C_input_x of form:
+            # {npos, epos, h, phi, theta, psi, V, alpha, beta, p, q, r, P3, dh, da, dr, lf2, fi_flag}
+            
+        C_input_x = np.concatenate((x[0:12],u,x[13:14]))
+        self.nlplant.Nlplant(ctypes.c_void_p(C_input_x.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(self.fi_flag))    
+        #----------assign actuator xdots---------#
+        return np.concatenate((xdot[0:12], np.array([lf_state1_dot, lf_state2_dot])))
+
     def calc_xdot(self, x, u):
         
         """ calculates, and returns the rate of change of the state vector, x, using the empirical
         aerodynamic data held in folder 'C', also using equations of motion found in the
-        shared library C file 
+        shared library C file. This function includes all actuator models.
         
         Args:
             x:
                 numpy 2D array (vertical vector) of 18 elements
-                {xe,ye,h,phi,theta,psi,V,alpha,beta,p,q,r,T,dh,da,dr,lf1,lf2}
+                {xe,ye,h,phi,theta,psi,V,alpha,beta,p,q,r,T,dh,da,dr,lf2,lf1}
             u:
                 numpy 2D array (vertical vector) of 4 elements
                 {T,dh,da,dr}
@@ -96,7 +157,7 @@ class F16(gym.Env):
         Returns:
             xdot:
                 numpy 2D array (vertical vector) of 18 elements
-                time derivatives of {xe,ye,h,phi,theta,psi,V,alpha,beta,p,q,r,T,dh,da,dr,lf1,lf2}
+                time derivatives of {xe,ye,h,phi,theta,psi,V,alpha,beta,p,q,r,T,dh,da,dr,lf2,lf1}
         """        
         
         def upd_thrust(T_cmd, T_state):
@@ -169,6 +230,7 @@ class F16(gym.Env):
             # if x < self.lim[:,0]
             
         self.x += self.calc_xdot(self.x, self.u)*self.dt
+        self.x_degen = np.array(list(list(self.x)[i] for i in self.x_degen_idx))
         reward = 1
         isdone = False
         info = {'fidelity':'high'}
@@ -176,7 +238,9 @@ class F16(gym.Env):
     
     def reset(self):
         self.x = np.copy(self.x0)
+        self.x_degen = np.array(list(list(self.x)[i] for i in self.x_degen_idx))
         self.u = np.copy(self.u0)
+        self.u_degen = np.array(list(list(self.u)[i] for i in self.u_degen_idx))
         return self.get_obs(self.x, self.u)
         
     def get_obs(self, x, u):
@@ -191,6 +255,10 @@ class F16(gym.Env):
             y -> system output
             of form numpy 1D array to match gym requirements
         """
+        
+        return np.copy(np.array(list(x[i] for i in self.y_vars), dtype='float32').flatten())
+    
+    def get_obs_na(self, x, u):
         
         return np.copy(np.array(list(x[i] for i in self.y_vars), dtype='float32').flatten())
         
@@ -290,7 +358,7 @@ class F16(gym.Env):
         
         return x_trim, opt
         
-    def linearise(self, x, u):
+    def linearise(self, x, u, calc_xdot=None, get_obs=None):
         
         """ Function to linearise the aircraft at a given state vector and input demand.
         This is done by perturbing each state and measuring its effect on every other state.
@@ -304,6 +372,11 @@ class F16(gym.Env):
         Returns:
             4 2D numpy arrays, representing the 4 state space matrices, A,B,C,D.
         """
+        
+        if calc_xdot == None:
+            calc_xdot = self.calc_xdot
+        if get_obs == None:
+            get_obs = self.get_obs
         
         eps = 1e-06
         
@@ -369,6 +442,7 @@ class F16(gym.Env):
             #--------------Take Action---------------#
             # MPC prediction using squiggly C and M matrices
             #CC, MM = calc_MC(paras_mpc[0], A[:,:,idx], B[:,:,idx], time_step)
+            self.u[1:4] = self.calc_MPC_action_mk2(2,2,2,[10,0.001])
             
             #--------------Integrator----------------#            
             self.step(self.u)
@@ -403,7 +477,7 @@ class F16(gym.Env):
         OSQP_A = gen_OSQP_A(CC, cscm, rlcm)
         #
         Q = square_mat_degen_2d(C.T @ C, self.x_degen_idx)        
-        R = np.eye(3)*0.1
+        R = np.eye(3)*1000
         K = dlqr(A_degen, B_degen, Q, R)
         Q_bar = scipy.linalg.solve_discrete_lyapunov((A_degen + np.matmul(B_degen, K)).T, Q + np.matmul(np.matmul(K.T,R), K))
         QQ = dmom(Q,hzn)
@@ -420,9 +494,11 @@ class F16(gym.Env):
         rlcl, rlcu = gen_rate_lim_constr_upper_lower(self.u_degen, hzn, [-60, -80, -120], [60, 80, 120])
         OSQP_l = np.concatenate((l1, cscl, rlcl))
         OSQP_u = np.concatenate((u1, cscu, rlcu))
-        #
+        # ITS NOT UPDATING x_degen!!!!
+        x_dem = np.copy(self.x_degen)
+        #x_dem[4:7,0] = [p_dem, q_dem, r_dem]
         P = 2*H
-        q = (2 * self.x_degen.T @ F.T).T
+        q = (2 * (x_dem-self.x0_degen).T @ F.T).T
         m = osqp.OSQP()
         m.setup(P=csc_matrix(P), q=q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False)
         res = m.solve()
