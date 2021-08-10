@@ -29,7 +29,7 @@ from sys import exit
 
 f16 = F16(x0, x0[12:16], paras_sim)
 # u_opt = f16.calc_MPC_action_mk2(10,10,10,paras_mpc)
-# f16.sim(f16.x0)
+f16.sim_na()
 
 
 # f16.sim(f16.x0)

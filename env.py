@@ -54,6 +54,11 @@ class F16(gym.Env):
         
         self.lim = np.append(np.array(x_lim).T, np.array(act_lim).T, axis=0)
         
+        
+        self.xr_idx = [2,3,4,6,7,8,9,10,11,17,16]
+        self.xr = np.array(list(list(self.x)[i] for i in self.xr_idx))
+        self.xr0 = np.array(list(list(self.x0)[i] for i in self.xr_idx))
+        
         # x_degen = {phi, theta, alpha, beta, p, q, r, dh, da, dr}, as we dont
         # want to control every state
         self.x_degen_idx = [3,4,7,8,9,10,11,13,14,15]
@@ -391,8 +396,8 @@ class F16(gym.Env):
             dx = np.zeros([len(x),1])
             dx[i] = eps
             
-            A[:, i] = (self.calc_xdot(x + dx, u)[:,0] - self.calc_xdot(x, u)[:,0]) / eps
-            C[:, i] = (self.get_obs(x + dx, u) - self.get_obs(x, u)) / eps
+            A[:, i] = (calc_xdot(x + dx, u)[:,0] - calc_xdot(x, u)[:,0]) / eps
+            C[:, i] = (get_obs(x + dx, u) - get_obs(x, u)) / eps
             
         # Perturb each of the input variables and compute linearization
         for i in range(len(u)):
@@ -400,8 +405,8 @@ class F16(gym.Env):
             du = np.zeros([len(u),1])
             du[i] = eps
                     
-            B[:, i] = (self.calc_xdot(x, u + du)[:,0] - self.calc_xdot(x, u)[:,0]) / eps
-            D[:, i] = (self.get_obs(x, u + du) - self.get_obs(x, u)) / eps
+            B[:, i] = (calc_xdot(x, u + du)[:,0] - calc_xdot(x, u)[:,0]) / eps
+            D[:, i] = (get_obs(x, u + du) - get_obs(x, u)) / eps
         
         return A, B, C, D      
     
@@ -422,7 +427,8 @@ class F16(gym.Env):
         
         # setup sequence of time
         rng = np.linspace(self.time_start, self.time_end, int((self.time_end-self.time_start)/self.dt))
-
+        
+        
         # create storage
         x_storage = np.zeros([len(rng),len(self.x)])
         
@@ -465,6 +471,32 @@ class F16(gym.Env):
         
         return x_storage
     
+    def sim_na(self, visualise=True):
+        # setup sequence of time
+        rng = np.linspace(self.time_start, self.time_end, int((self.time_end-self.time_start)/self.dt))
+        
+        # create storage
+        x_storage = np.zeros([len(rng),len(self.x_na)])
+        
+        # begin progressbar
+        bar = progressbar.ProgressBar(maxval=len(rng)).start()
+        
+        tic()
+        
+        for idx, val in enumerate(rng):
+            self.linearise(self.x_na, self.u, calc_xdot=self.calc_xdot_na, get_obs=self.get_obs_na)
+            self.x_na += self.calc_xdot_na(self.x_na, self.u) * self.dt
+            x_storage[idx,:] = self.x_na[:,0]
+            bar.update(idx)
+        
+        toc()
+        
+    def calc_MPC_action_mk3(self, V_dem, p_dem, q_dem, r_dem, paras_mpc):
+        hzn = paras_mpc[0]
+        A,B,C,D = self.linearise(self.x_na, self.u, calc_xdot=self.calc_xdot_na, get_obs=self.get_obs_na)
+        A,B,C,D = cont2discrete((A,B,C,D), self.dt)[0:4]
+        
+    
     def calc_MPC_action_mk2(self, p_dem, q_dem, r_dem, paras_mpc):
         hzn = paras_mpc[0]
         A,B,C,D = self.linearise(self.x, self.u)
@@ -494,7 +526,7 @@ class F16(gym.Env):
         rlcl, rlcu = gen_rate_lim_constr_upper_lower(self.u_degen, hzn, [-60, -80, -120], [60, 80, 120])
         OSQP_l = np.concatenate((l1, cscl, rlcl))
         OSQP_u = np.concatenate((u1, cscu, rlcu))
-        # ITS NOT UPDATING x_degen!!!!
+        # 
         x_dem = np.copy(self.x_degen)
         #x_dem[4:7,0] = [p_dem, q_dem, r_dem]
         P = 2*H
