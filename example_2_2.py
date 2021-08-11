@@ -18,6 +18,7 @@ K = - dlqr(A, B, Q, R)
 from scipy.linalg import solve_discrete_lyapunov
 
 Q_bar = solve_discrete_lyapunov((A + np.matmul(B, K)).T, Q + np.matmul(np.matmul(K.T,R), K))
+Q_bar = solve_discrete_lyapunov((A + B @ K).T, Q + K.T @ R @ K)
 
 QQ[-A.shape[0]:,-A.shape[0]:] = Q_bar
 
@@ -26,3 +27,5 @@ F = CC.T @ QQ @ MM
 G = MM.T @ QQ @ MM
 
 L = - np.linalg.inv(H) @ F
+
+

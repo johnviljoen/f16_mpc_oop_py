@@ -23,8 +23,7 @@ from scipy.sparse import csc_matrix
 
 # custom files
 from parameters import act_lim, x_lim
-from utils import tic, toc, vis, dmom, \
-    gen_rate_lim_constr_upper_lower, gen_cmd_sat_constr_upper_lower
+from utils import *
 
 class F16(gym.Env):
     
@@ -473,6 +472,42 @@ class F16(gym.Env):
         
         toc()
         
+    def calc_MPC_action_mk2(self, V_dem, p_dem, q_dem, r_dem, paras_mpc):
+        hzn = paras_mpc[0] * 1
+        dt = 1
+        # u = np.copy(self.u)[1:4]
+        x = np.copy(self.x_na)
+        A,B,C,D = self.linearise(self.x_na, self.u, calc_xdot=self.calc_xdot_na, get_obs=self.get_obs_na)
+        A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
+        ninputs = B.shape[1]
+        nstates = A.shape[0]
+        MM, CC = calc_MC(hzn, A, B, dt)
+        
+        Q = C.T @ C
+        # Q[7:9,7:9] = 0
+        # Q[9,9] = 10
+        # Q[10,10] = 0.1
+        R = np.eye(ninputs) * 0.01 # incredibly sensitive
+        
+        # return A, B, Q, R
+        
+        K = - dlqr(A, B, Q, R)
+        Q_bar = scipy.linalg.solve_discrete_lyapunov((A + B @ K).T, Q + K.T @ R @ K)
+        QQ = dmom(Q, hzn)
+        RR = dmom(R, hzn)
+        QQ[-nstates:,-nstates:] = Q_bar
+        
+        H = CC.T @ QQ @ CC + RR
+        F = CC.T @ QQ @ MM
+        G = MM.T @ QQ @ MM
+        
+        P = 2*H
+        q = (2 * x.T @ F.T).T
+        return P, q
+        
+        # cscm = gen_cmd_sat_constr_mat(self.u, hzn)
+        # rlcm = gen_rate_lim_constr_mat(self.u, hzn)
+        
     def calc_MPC_action(self, V_dem, p_dem, q_dem, r_dem, paras_mpc):
         hzn = paras_mpc[0]
         u = np.copy(self.u)[1:4]
@@ -558,5 +593,5 @@ class F16(gym.Env):
         m = osqp.OSQP()
         m.setup(P=csc_matrix(P), q=q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False)
         res = m.solve()
-        return res
+        return H
 

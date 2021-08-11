@@ -18,6 +18,11 @@ from numpy import pi
 
 import scipy
 
+import ctypes
+
+from parameters import u_cmd_lim, x_lim
+
+
 # In[ All expect u in vertical vector format, hzn as a scalar ]
 
 def gen_rate_lim_constr_mat(u, hzn):
@@ -64,7 +69,10 @@ def gen_cmd_sat_constr_upper_lower(u, hzn, lower_limits, upper_limits):
 
 def gen_OSQP_A(CC, cscm, rlcm):
     return np.concatenate((CC, cscm, rlcm), axis=0)
+
+def setup_OSQP_paras(CC, hzn, u_len, x_lim, u_cmd_lim, u_rate_lim):
     
+        
 
 # In[]
 def calc_MC(hzn, A, B, dt):
@@ -156,6 +164,51 @@ def dmom(mat, num_mats):
                 matomats[nrows*i:nrows*(i+1),ncols*j:ncols*(j+1)] = mat
                 
     return matomats
+
+# In[]
+
+def upd_lef(h, V, coeff, alpha, lef_state_1, lef_state_2, nlplant):
+    
+    nlplant.atmos(ctypes.c_double(h),ctypes.c_double(V),ctypes.c_void_p(coeff.ctypes.data))
+    atmos_out = coeff[1]/coeff[2] * 9.05
+    alpha_deg = alpha*180/pi
+    
+    LF_err = alpha_deg - (lef_state_1 + (2 * alpha_deg))
+    #lef_state_1 += LF_err*7.25*time_step
+    LF_out = (lef_state_1 + (2 * alpha_deg)) * 1.38
+    
+    lef_cmd = LF_out + 1.45 - atmos_out
+    
+    # command saturation
+    lef_cmd = np.clip(lef_cmd,u_cmd_lim[1][4],u_cmd_lim[0][4])
+    # rate saturation
+    lef_err = np.clip((1/0.136) * (lef_cmd - lef_state_2),-25,25)
+    
+    return LF_err*7.25, lef_err
+
+def upd_thrust(T_cmd, T_state):
+    # command saturation
+    T_cmd = np.clip(T_cmd,u_cmd_lim[1][0],u_cmd_lim[0][0])
+    # rate saturation
+    return np.clip(T_cmd - T_state, -10000, 10000)
+
+def upd_dstab(dstab_cmd, dstab_state):
+    # command saturation
+    dstab_cmd = np.clip(dstab_cmd,u_cmd_lim[1][1],u_cmd_lim[0][1])
+    # rate saturation
+    return np.clip(20.2*(dstab_cmd - dstab_state), -60, 60)
+
+def upd_ail(ail_cmd, ail_state):
+    # command saturation
+    ail_cmd = np.clip(ail_cmd,u_cmd_lim[1][2],u_cmd_lim[0][2])
+    # rate saturation
+    return np.clip(20.2*(ail_cmd - ail_state), -80, 80)
+
+def upd_rud(rud_cmd, rud_state):
+    # command saturation
+    rud_cmd = np.clip(rud_cmd,u_cmd_lim[1][3],u_cmd_lim[0][3])
+    # rate saturation
+    return np.clip(20.2*(rud_cmd - rud_state), -120, 120)
 
 # In[]
 

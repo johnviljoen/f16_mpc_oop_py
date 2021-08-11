@@ -13,6 +13,8 @@ the aircraft, environmental, simulation, initial conditions, and other parameter
 import numpy as np
 from numpy import pi
 from scipy.constants import g
+import os
+from ctypes import CDLL
 
 # In[simulation parameters]  
 
@@ -29,7 +31,7 @@ stab_flag = 0
 
 # In[MPC parameters]
 
-hzn = 10
+hzn = 4
 
 pred_dt = 0.001
 
@@ -100,20 +102,30 @@ lef_max         = 25            # (deg)
 # In[wrap for input]  
 
 # initial_state_vector = np.array([npos, epos, h, phi, theta, psi, vt, alpha, beta, p, q, r, T, dh, da, dr, lef, fi_flag])
-
-simulation_parameters = [time_step, time_start, time_end, stab_flag, fi_flag]
-
 model_predictive_control_parameters = [hzn, pred_dt]
 
 m2f = 3.28084 # metres to feet conversion
 f2m = 1/m2f # feet to metres conversion
-initial_state_vector_ft_rad = np.array([npos*m2f, epos*m2f, h*m2f, phi, theta, psi, vt*m2f, alpha, beta, p, q, r, T, dh, da, dr, lef, -alpha*180/pi])
+initial_state_vector_ft_rad = np.array([npos*m2f, epos*m2f, h*m2f, phi, theta, psi, vt*m2f, alpha, beta, p, q, r, T, dh, da, dr, lef, -alpha*180/pi])[np.newaxis].T
     
-act_lim = [[T_max, dh_max, da_max, dr_max, lef_max],
+u_cmd_lim = [[T_max, dh_max, da_max, dr_max, lef_max],
            [T_min, dh_min, da_min, dr_min, lef_min]]
+
+u_rate_lim = [[10000, 60, 80, 120],
+              [-10000, -60, -80, -120]]
 
 x_lim = [[npos_max, epos_max, h_max, phi_max, theta_max, psi_max, V_max, alpha_max, beta_max, p_max, q_max, r_max],
          [npos_min, epos_min, h_min, phi_min, theta_min, psi_min, V_min, alpha_min, beta_min, p_min, q_min, r_min]]
+
+observed_states = [6,7,8,9,10,11]
+
+if stab_flag == 1:
+    so_file = os.getcwd() + "/C/nlplant_xcg35.so"
+elif stab_flag == 0:
+    so_file = os.getcwd() + "/C/nlplant_xcg25.so"
+nlplant = CDLL(so_file)
+
+simulation_parameters = [time_step, time_start, time_end, stab_flag, fi_flag, x_lim, u_cmd_lim, u_rate_lim, observed_states, nlplant]
 
 # In[additional info provided for brevity]
 
