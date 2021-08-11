@@ -6,7 +6,7 @@ Created on Sat Jul 31 19:07:44 2021
 @author: johnviljoen
 """
 
-from env import F16
+from env_mk2 import F16
 
 from parameters import initial_state_vector_ft_rad as x0
 from parameters import simulation_parameters as paras_sim
@@ -29,8 +29,8 @@ from sys import exit
 
 f16 = F16(x0, x0[12:16], paras_sim)
 # u_opt = f16.calc_MPC_action_mk2(10,10,10,paras_mpc)
-f16.sim_na()
-
+A,B,C,D = f16.linearise(f16.x_na, f16.u, calc_xdot=f16.calc_xdot_na, get_obs=f16.get_obs_na)
+res = f16.calc_MPC_action(0, 0, 0, 0, paras_mpc)
 
 # f16.sim(f16.x0)
 

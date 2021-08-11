@@ -18,15 +18,13 @@ import os
 import progressbar
 from scipy.signal import cont2discrete
 import scipy
-from numpy.linalg import eigvals
 import osqp
 from scipy.sparse import csc_matrix
 
 # custom files
 from parameters import act_lim, x_lim
-from utils import tic, toc, vis, dmom, square_mat_degen_2d, gen_rate_lim_constr_mat, \
-    gen_rate_lim_constr_upper_lower, gen_cmd_sat_constr_mat, gen_cmd_sat_constr_upper_lower, \
-        gen_OSQP_A, dlqr, calc_MC
+from utils import tic, toc, vis, dmom, \
+    gen_rate_lim_constr_upper_lower, gen_cmd_sat_constr_upper_lower
 
 class F16(gym.Env):
     
@@ -58,15 +56,7 @@ class F16(gym.Env):
         self.xr_idx = [2,3,4,6,7,8,9,10,11,17,16]
         self.xr = np.array(list(list(self.x)[i] for i in self.xr_idx))
         self.xr0 = np.array(list(list(self.x0)[i] for i in self.xr_idx))
-        
-        # x_degen = {phi, theta, alpha, beta, p, q, r, dh, da, dr}, as we dont
-        # want to control every state
-        self.x_degen_idx = [3,4,7,8,9,10,11,13,14,15]
-        self.x_degen = np.array(list(list(self.x)[i] for i in self.x_degen_idx))
-        self.x0_degen = np.array(list(list(self.x0)[i] for i in self.x_degen_idx))
-        
-        self.u_degen_idx = [1,2,3]
-        self.u_degen = np.array(list(list(self.u)[i] for i in self.u_degen_idx))
+
         
         # no actuator x :)
         self.x_na = np.copy(np.concatenate((self.x[0:12,:],self.x[16:17,:],self.x[15:16])))
@@ -229,13 +219,7 @@ class F16(gym.Env):
         return xdot
         
     def step(self, action):
-        
-        # def check_bounds(x):
-            
-            # if x < self.lim[:,0]
-            
         self.x += self.calc_xdot(self.x, self.u)*self.dt
-        self.x_degen = np.array(list(list(self.x)[i] for i in self.x_degen_idx))
         reward = 1
         isdone = False
         info = {'fidelity':'high'}
@@ -243,9 +227,7 @@ class F16(gym.Env):
     
     def reset(self):
         self.x = np.copy(self.x0)
-        self.x_degen = np.array(list(list(self.x)[i] for i in self.x_degen_idx))
         self.u = np.copy(self.u0)
-        self.u_degen = np.array(list(list(self.u)[i] for i in self.u_degen_idx))
         return self.get_obs(self.x, self.u)
         
     def get_obs(self, x, u):
@@ -448,7 +430,7 @@ class F16(gym.Env):
             #--------------Take Action---------------#
             # MPC prediction using squiggly C and M matrices
             #CC, MM = calc_MC(paras_mpc[0], A[:,:,idx], B[:,:,idx], time_step)
-            self.u[1:4] = self.calc_MPC_action_mk2(2,2,2,[10,0.001])
+            # self.u[1:4] = self.calc_MPC_action_mk2(2,2,2,[10,0.001])
             
             #--------------Integrator----------------#            
             self.step(self.u)
@@ -491,203 +473,90 @@ class F16(gym.Env):
         
         toc()
         
-    def calc_MPC_action_mk3(self, V_dem, p_dem, q_dem, r_dem, paras_mpc):
+    def calc_MPC_action(self, V_dem, p_dem, q_dem, r_dem, paras_mpc):
         hzn = paras_mpc[0]
+        u = np.copy(self.u)[1:4]
+        x = np.copy(self.xr)
         A,B,C,D = self.linearise(self.x_na, self.u, calc_xdot=self.calc_xdot_na, get_obs=self.get_obs_na)
         A,B,C,D = cont2discrete((A,B,C,D), self.dt)[0:4]
-        # Ar = square_mat_degen_2d(A, self.)
-    
-    def calc_MPC_action_mk2(self, p_dem, q_dem, r_dem, paras_mpc):
-        hzn = paras_mpc[0]
-        A,B,C,D = self.linearise(self.x, self.u)
-        A,B,C,D = cont2discrete((A,B,C,D), self.dt)[0:4]
-        A_degen = square_mat_degen_2d(A, self.x_degen_idx)
-        B_degen = B[self.x_degen_idx,1:4]
-        cscm = gen_cmd_sat_constr_mat(self.u_degen, hzn)
-        rlcm = gen_rate_lim_constr_mat(self.u_degen,hzn)
-        MM, CC = calc_MC(hzn, A_degen, B_degen, self.dt)
+        
+        def square_mat_degen_2d(mat, degen_idx):
+            degen_mat = np.zeros([len(degen_idx),len(degen_idx)])
+            for i in range(len(degen_idx)):
+                degen_mat[:,i] = mat[degen_idx, [degen_idx[i] for x in range(len(degen_idx))]]
+            return degen_mat
+        
+        degen_idx = [2,3,4,6,7,8,9,10,11,12,13] # remove npos, epos
+        Ar = square_mat_degen_2d(A, degen_idx)
+        Br = B[degen_idx,1:4]
+        
+        def gen_cmd_sat_constr_mat(u, hzn):
+            return dmom(np.eye(len(u)), hzn)
+        
+        def gen_rate_lim_constr_mat(u, hzn):
+            rate_lim_constr_mat = np.eye(len(u)*hzn)
+            for i in range(len(u)*hzn):
+                if i >= len(u):
+                    rate_lim_constr_mat[i,i-len(u)] = -1
+            return rate_lim_constr_mat
+        
+        cscm = gen_cmd_sat_constr_mat(u, hzn)
+        rlcm = gen_rate_lim_constr_mat(u, hzn)
+        
+        def calc_MC(hzn, A, B, dt):
+            nstates = A.shape[0]
+            ninputs = B.shape[1]
+            CC = np.zeros([nstates*hzn, ninputs*hzn])
+            MM = np.zeros([nstates*hzn, nstates])
+            Bz = np.zeros([nstates, ninputs])
+            for i in range(hzn):
+                MM[nstates*i:nstates*(i+1),:] = np.linalg.matrix_power(A,i+1) * dt ** (i+1)
+                for j in range(hzn):
+                    if i-j >= 0:
+                        CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = np.matmul(np.linalg.matrix_power(A,(i-j)),B) * dt ** (i-j+1)
+                    else:
+                        CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = Bz
+            return MM, CC
+        
+        MM, CC = calc_MC(hzn, Ar, Br, self.dt)
+        
+        def gen_OSQP_A(CC, cscm, rlcm):
+            return np.concatenate((CC, cscm, rlcm), axis=0)
+        
         OSQP_A = gen_OSQP_A(CC, cscm, rlcm)
-        #
-        Q = square_mat_degen_2d(C.T @ C, self.x_degen_idx)        
+        Q = square_mat_degen_2d(C.T @ C, degen_idx)
         R = np.eye(3)*1000
-        K = -dlqr(A_degen, B_degen, Q, R)
-        Q_bar = scipy.linalg.solve_discrete_lyapunov((A_degen + np.matmul(B_degen, K)).T, Q + np.matmul(np.matmul(K.T,R), K))
+        
+        def dlqr(A,B,Q,R):
+            P = np.matrix(scipy.linalg.solve_discrete_are(A, B, Q, R))
+            return np.matrix(scipy.linalg.inv(B.T @ P @ B+R) @ (B.T @ P @ A))
+        
+        K = -dlqr(Ar, Br, Q, R)
+        Q_bar = scipy.linalg.solve_discrete_lyapunov((Ar + np.matmul(Br, K)).T, Q + np.matmul(np.matmul(K.T,R), K))
         QQ = dmom(Q,hzn)
         RR = dmom(R,hzn)
-        QQ[-A_degen.shape[0]:,-A_degen.shape[0]:] = Q_bar
+        QQ[-Ar.shape[0]:,-Ar.shape[0]:] = Q_bar
         H = CC.T @ QQ @ CC + RR
         F = CC.T @ QQ @ MM
         G = MM.T @ QQ @ MM
-        x_u = np.array(list(list(self.lim.flatten(order='F'))[i] for i in self.x_degen_idx))[np.newaxis].T
-        x_l = np.array(list(list(self.lim.flatten(order='F'))[i] for i in [i + 17 for i in self.x_degen_idx]))[np.newaxis].T
-        u1 = np.concatenate(([x_u - A_degen @ self.x_degen] * hzn))
-        l1 = np.concatenate(([x_l - A_degen @ self.x_degen] * hzn))
-        cscl, cscu = gen_cmd_sat_constr_upper_lower(self.u_degen, hzn, self.lim[13:16,1], self.lim[13:16,0])
-        rlcl, rlcu = gen_rate_lim_constr_upper_lower(self.u_degen, hzn, [-60, -80, -120], [60, 80, 120])
+        
+        lim_idx = [2,3,4,6,7,8,9,10,11] # doesnt include lef state 1 or 2
+        x_u = np.array(list(list(self.lim.flatten(order='F'))[i] for i in lim_idx))[np.newaxis].T
+        x_u = np.concatenate((x_u, np.array([np.infty, self.lim[-1,0]])[np.newaxis].T))
+        x_l = np.array(list(list(self.lim.flatten(order='F'))[i] for i in [i + 17 for i in lim_idx]))[np.newaxis].T
+        x_l = np.concatenate((x_l, np.array([-np.infty, self.lim[-1,1]])[np.newaxis].T))
+        
+        u1 = np.concatenate(([x_u - Ar @ self.xr] * hzn))
+        l1 = np.concatenate(([x_l - Ar @ self.xr] * hzn))
+        cscl, cscu = gen_cmd_sat_constr_upper_lower(u, hzn, self.lim[13:16,1], self.lim[13:16,0])
+        rlcl, rlcu = gen_rate_lim_constr_upper_lower(u, hzn, [-60, -80, -120], [60, 80, 120])
         OSQP_l = np.concatenate((l1, cscl, rlcl))
         OSQP_u = np.concatenate((u1, cscu, rlcu))
-        # 
-        x_dem = np.copy(self.x_degen)
-        #x_dem[4:7,0] = [p_dem, q_dem, r_dem]
+        
         P = 2*H
-        q = (2 * (x_dem-self.x0_degen).T @ F.T).T
+        q = (2 * x.T @ F.T).T
         m = osqp.OSQP()
         m.setup(P=csc_matrix(P), q=q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False)
         res = m.solve()
-        return res.x[0:len(self.u_degen)][np.newaxis].T
-    
-    def calc_MPC_action(self, p_dem, q_dem, r_dem, paras_mpc):
-        
-        """ Function to calculate the optimal control action to take to achieve 
-        demanded p, q, r, states using a dual model predictive control technique.
-        
-        Args:
-            p_dem:
-                float scalar value, the demanded roll rate in deg/s
-            q_dem:
-                float scalar value, the demanded pitch rate in deg/s
-            r_dem:
-                float scalar value, the demanded yaw rate in deg/s
-                
-        Returns:
-            dh:
-                float scalar value, the optimal horizontal stabilator demand in deg
-            da:
-                float scalar value, the optimal aileron demand in deg
-            dr:
-                float scalar value, the optimal rudder demand in deg
-        """
-        
-        
-        
-        """ The first step to MPC is generating a prediction of subsequent time steps.
-        This is done by linearising the system, converting this to a discrete system
-        and then generating 2 large matrices which encapsulate future time steps 
-        up to the 'horizon'. This is done in 'calc_MC'."""
-        
-        # find continuous linearised state space model
-        A_c, B_c, C_c, D_c = self.linearise(self.x, self.u)
-        
-        # convert to discrete state spce model
-        A_d, B_d, C_d, D_d = cont2discrete((A_c, B_c, C_c, D_c), self.dt)[0:4]
-        
+        return res
 
-        
-        A_d_degen = square_mat_degen_2d(A_d, self.x_degen_idx)
-        B_d_degen = B_d[self.x_degen_idx,1:4]
-        
-
-        
-        # calculate MM, CC
-        MM, CC = calc_MC(paras_mpc[0], A_d_degen, B_d_degen, self.dt)
-        
-        """ Now we must calculate the LQ optimal gain matrix, K. This is done with
-        a cost function, determined by 2 matrices: Q and R. Q is chosen to be C_d.T C_d
-        although this could be eye. Q chooses the weightings of each state and so
-        we can manipulate each states influence on the cost function here. R is """
-        
-        Q = square_mat_degen_2d(C_d.T @ C_d, self.x_degen_idx)        
-        R = np.eye(3)*0.1
-            
-        
-        
-        K = -dlqr(A_d_degen, B_d_degen, Q, R)
-        
-        evals, evecs = scipy.linalg.eig(A_d_degen - B_d_degen @ K)
-        
-
-        
-        """ Now we must calculate the terminal weighting matrix for the full system
-        . This matrix allows the finite horizon optimisation to also optimise for the 
-        infinite horizon case, where the system is under control of the LQ optimal
-        control law."""
-        
-        Q_bar = scipy.linalg.solve_discrete_lyapunov((A_d_degen + np.matmul(B_d_degen, K)).T, Q + np.matmul(np.matmul(K.T,R), K))
-        
-        QQ = dmom(Q,paras_mpc[0])
-        RR = dmom(R,paras_mpc[0])
-        
-        QQ[-A_d_degen.shape[0]:,-A_d_degen.shape[0]:] = Q_bar
-                
-        
-        """ Finally we must find the Q_bar matrix by combining a diagonal matrix 
-        of Q matrices with the terminal gain matrix as its final element. This
-        then allows us to find the optimal sequence of inputs over the horizon
-        of which the first is chosen as the optimal control action for this timestep."""
-        
-        H = CC.T @ QQ @ CC + RR
-        F = CC.T @ QQ @ MM
-        G = MM.T @ QQ @ MM
-        
-        # dh, da, dr = 0, 0, 0
-        
-        """ Next we must incorporate constraints of the system into our optimisation"""
-        # A_ci = np.concatenate((CC,-CC), axis=0)
-        
-        def calc_A_ci(CC, hzn, stp):
-            nstates = int(CC.shape[0]/hzn)
-            A_ci = np.concatenate((CC[stp*nstates:(stp+1)*nstates,:], -CC[stp*nstates:(stp+1)*nstates,:]), axis=0)
-            return A_ci
-        
-        A_ci = calc_A_ci(CC,paras_mpc[0],3)
-        
-        np.array(list((x_lim[1] + act_lim[1])[i] for i in self.y_vars), dtype='float32')
-        
-        b_0_idx = self.x_degen_idx.copy()
-        x_degen_idx_2 = [i + len(self.x) - 1 for i in b_0_idx]
-        b_0_idx.extend(x_degen_idx_2)
-        b_0 = np.array(list(list(self.lim.flatten(order='F'))[i] for i in b_0_idx))
-        b_0[len(self.x_degen_idx):] = -b_0[len(self.x_degen_idx):]
-        b_0 = b_0[np.newaxis].T
-        
-        def calc_B_x(A_d_degen, stp):
-            return np.concatenate((-np.linalg.matrix_power(A_d_degen,stp),np.linalg.matrix_power(A_d_degen,stp)), axis=0)
-            
-        B_x = calc_B_x(A_d_degen,3)
-        
-        """ Now we have A_ci, b_0 and B_x """
-        u_test_seq = np.squeeze(np.array([self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4],self.u[1:4]]))
-
-        u_test_seq = u_test_seq.flatten()[np.newaxis].T
-        
-        obj_func_args = (H,self.x_degen,F)
-        cons_func_args = (A_ci,b_0,B_x,self.x_degen)
-        
-        def MPC_obj_func(u_seq, H, x, F):
-            # function to minimise
-            u_seq = u_seq.squeeze()[np.newaxis].T
-            
-            # H = args[0]
-            # x = args[1]
-            # F = args[2]
-            return (u_seq.T @ H @ u_seq + 2 * x.T @ F.T @ u_seq).flatten()
-        
-        
-        def MPC_cons_func(u_seq, A_ci, b_0, B_x, x):
-            
-            # must recieve u_seq that is 1D
-            
-            u_seq = u_seq[np.newaxis].T
-            print('u_seq:', u_seq.shape)
-            # print('u_seq:', u_seq.shape)
-            # print('A_ci:', A_ci.shape)
-            # print('b_0:', b_0.shape)
-            # print('B_x:', B_x.shape)
-            # print('x:', x.shape)
-            
-            return (A_ci @ u_seq - b_0 - B_x @ x).flatten()
-                
-        cons = ({'type':'ineq', 'fun':MPC_cons_func, 'args':cons_func_args})
-        
-        # set initial guess:
-        u_seq0 = 1.1 * np.concatenate((self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen,self.u_degen)).flatten()
-        # print('u_seq0:',u_seq0)
-        
-        
-        sol = minimize(MPC_obj_func, u_seq0, method='SLSQP', args=obj_func_args, constraints=cons)
-        
-        return sol, u_seq0, MPC_obj_func(u_test_seq, H, self.x_degen, F), MPC_cons_func(u_test_seq, A_ci, b_0, B_x, self.x_degen)
-        
-        
-        
-        
