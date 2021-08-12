@@ -25,54 +25,71 @@ from parameters import u_cmd_lim, x_lim
 
 # In[ All expect u in vertical vector format, hzn as a scalar ]
 
-def gen_rate_lim_constr_mat(u, hzn):
+def gen_rate_lim_constr_mat(u_len, hzn):
     
-    rate_lim_constr_mat = np.eye(len(u)*hzn)
+    rate_lim_constr_mat = np.eye(u_len*hzn)
     
-    for i in range(len(u)*hzn):
-        if i >= len(u):
-            rate_lim_constr_mat[i,i-len(u)] = -1
+    for i in range(u_len*hzn):
+        if i >= u_len:
+            rate_lim_constr_mat[i,i-u_len] = -1
             
     return rate_lim_constr_mat
 
-def gen_rate_lim_constr_upper_lower(u, hzn, lower_limits, upper_limits):
+def gen_rate_lim_constr_upper_lower(u_len, hzn, lower_limits, upper_limits):
     
-    rlcl = np.zeros([len(u)*hzn,1])
-    rlcu = np.zeros([len(u)*hzn,1])
+    rlcl = np.zeros([u_len*hzn,1])
+    rlcu = np.zeros([u_len*hzn,1])
     
-    rlcl[0:len(u),0] = -np.infty
-    rlcu[0:len(u),0] = np.infty
+    rlcl[0:u_len,0] = -np.infty
+    rlcu[0:u_len,0] = np.infty
     
     for i in range(hzn):
         if i >= 1:
-            for j in range(len(u)):
-                rlcl[len(u)*i+j,0] = lower_limits[j]
-                rlcu[len(u)*i+j,0] = upper_limits[j]
+            for j in range(u_len):
+                rlcl[u_len*i+j,0] = lower_limits[j]
+                rlcu[u_len*i+j,0] = upper_limits[j]
             
     return rlcl, rlcu
     
-def gen_cmd_sat_constr_mat(u, hzn):
+def gen_cmd_sat_constr_mat(u_len, hzn):
     
-    return dmom(np.eye(len(u)), hzn)
+    return dmom(np.eye(u_len), hzn)
 
-def gen_cmd_sat_constr_upper_lower(u, hzn, lower_limits, upper_limits):
+def gen_cmd_sat_constr_upper_lower(u_len, hzn, lower_limits, upper_limits):
     
-    cscl = np.zeros([len(u)*hzn,1])
-    cscu = np.zeros([len(u)*hzn,1])
+    cscl = np.zeros([u_len*hzn,1])
+    cscu = np.zeros([u_len*hzn,1])
     
     for i in range(hzn):
-        for j in range(len(u)):
-            cscl[len(u)*i + j,0] = lower_limits[j]
-            cscu[len(u)*i + j,0] = upper_limits[j]
+        for j in range(u_len):
+            cscl[u_len*i + j,0] = lower_limits[j]
+            cscu[u_len*i + j,0] = upper_limits[j]
             
     return cscl, cscu
 
 def gen_OSQP_A(CC, cscm, rlcm):
     return np.concatenate((CC, cscm, rlcm), axis=0)
 
-def setup_OSQP_paras(CC, hzn, u_len, x_lim, u_cmd_lim, u_rate_lim):
+def setup_OSQP_paras(CC, A, x, hzn, ninputs, x_lim, u_cmd_lim, u_rate_lim):
+    cscm = gen_cmd_sat_constr_mat(ninputs, hzn)
+    rlcm = gen_rate_lim_constr_mat(ninputs, hzn)
+    OSQP_A = gen_OSQP_A(CC, cscm, rlcm)
+
+    x_u = np.array(x_lim[0])
+    x_u = np.concatenate((x_u, np.array([np.infty, u_cmd_lim[0][4]])))[np.newaxis].T
     
-        
+    x_l = np.array(x_lim[1])
+    x_l = np.concatenate((x_l, np.array([-np.infty, u_cmd_lim[1][4]])))[np.newaxis].T
+    
+    u1 = np.concatenate(([x_u - A @ x] * hzn))
+    l1 = np.concatenate(([x_l - A @ x] * hzn))
+    cscl, cscu = gen_cmd_sat_constr_upper_lower(ninputs, hzn, u_cmd_lim[1][1:4], u_cmd_lim[0][1:4])
+    rlcl, rlcu = gen_rate_lim_constr_upper_lower(ninputs, hzn, [-60, -80, -120], [60, 80, 120])
+    OSQP_l = np.concatenate((l1, cscl, rlcl))
+    OSQP_u = np.concatenate((u1, cscu, rlcu))
+    
+    return OSQP_A, OSQP_l, OSQP_u
+    
 
 # In[]
 def calc_MC(hzn, A, B, dt):

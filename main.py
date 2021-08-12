@@ -31,7 +31,7 @@ f16 = F16(x0, x0[12:16], paras_sim)
 # u_opt = f16.calc_MPC_action_mk2(10,10,10,paras_mpc)
 A,B,C,D = f16.linearise(f16.x, f16.u)
 # A,B,C,D = cont2discrete((A,B,C,D),)
-P,q = f16.calc_MPC_action_pqr(0, 0, 0, paras_mpc)
+res, P, q, OSQP_A, OSQP_l, OSQP_u = f16.calc_MPC_action_pqr(0, 0, 0, paras_mpc)
 
 # f16.sim(f16.x0)
 

@@ -53,7 +53,7 @@ class F16(gym.Env):
                                             high=np.array(list((self.x_lim[0] + self.u_cmd_lim[0])[i] for i in self.observed_states), dtype='float32'),\
                                                 shape=(len(self.observed_states),), dtype=np.float32)
         
-    def calc_xdot(self, x, u):
+    def _calc_xdot(self, x, u):
         
         """ calculates, and returns the rate of change of the state vector, x, using the empirical
         aerodynamic data held in folder 'C', also using equations of motion found in the
@@ -94,7 +94,7 @@ class F16(gym.Env):
         return xdot
         
     def step(self, action):
-        self.x += self.calc_xdot(self.x, self.u)*self.dt
+        self.x += self._calc_xdot(self.x, self.u)*self.dt
         reward = 1
         isdone = False
         info = {'fidelity':'high'}
@@ -156,13 +156,13 @@ class F16(gym.Env):
         bar = progressbar.ProgressBar(maxval=len(rng)).start() # begin progress bar
         tic() # start timer
         for idx, val in enumerate(rng):
-            self.linearise(self.x_na, self.u, calc_xdot=self.calc_xdot_na, get_obs=self.get_obs_na)
-            self.x_na += self.calc_xdot_na(self.x_na, self.u) * self.dt
+            self.linearise(self.x_na, self.u, _calc_xdot=self._calc_xdot_na, get_obs=self.get_obs_na)
+            self.x_na += self._calc_xdot_na(self.x_na, self.u) * self.dt
             x_storage[idx,:] = self.x_na[:,0]
             bar.update(idx)
         toc() # end timer
     
-    def _calc_xdot_na(self, x, u):
+    def __calc_xdot_na(self, x, u):
         """
         Args:
             x:
@@ -196,12 +196,13 @@ class F16(gym.Env):
         
     def calc_MPC_action_pqr(self, p_dem, q_dem, r_dem, paras_mpc):
         
-        hzn = paras_mpc[0] * 10 
+        hzn = paras_mpc[0] * 10
         # dt = self.dt
         dt = 1
         x = np.concatenate((self.x[2:5],self.x[6:12],self.x[16:17],self.x[15:16])) # select the new state vector -> removing actuators
+        x_lim = [list(self.x_lim[0][i] for i in [2,3,4,6,7,8,9,10,11]) , list(self.x_lim[1][i] for i in [2,3,4,6,7,8,9,10,11])]
         u = np.copy(self.u[1:4]) # we ignore the engine actuator here as we only command p,q,r
-        A,B,C,D = self.linearise(x, u, calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+        A,B,C,D = self.linearise(x, u, _calc_xdot=self.__calc_xdot_na, get_obs=self._get_obs_na)
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
         ignore_states = [0,1,5]
         ninputs = len(u)
@@ -209,7 +210,7 @@ class F16(gym.Env):
         MM, CC = calc_MC(hzn, A, B, dt)
         
         Q = C.T @ C
-        R = np.eye(ninputs) * 0.001 # incredibly sensitive
+        R = np.eye(ninputs) * 1 # incredibly sensitive
         
         # return A, B, Q, R
         
@@ -225,10 +226,14 @@ class F16(gym.Env):
         
         P = 2*H
         q = (2 * x.T @ F.T).T
-        return P, q
         
-        # cscm = gen_cmd_sat_constr_mat(self.u, hzn)
-        # rlcm = gen_rate_lim_constr_mat(self.u, hzn)
+        OSQP_A, OSQP_l, OSQP_u = setup_OSQP_paras(CC, A, x, hzn, ninputs, x_lim, self.u_cmd_lim, self.u_rate_lim)
+        
+        m = osqp.OSQP()
+        m.setup(P=csc_matrix(P), q=q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=True)
+        res = m.solve()
+        
+        return res.x[0:ninputs], P, q, OSQP_A, OSQP_l, OSQP_u
         
     def trim(self, h_t, v_t):
         
@@ -285,7 +290,7 @@ class F16(gym.Env):
             x[7] = np.clip(x[7], self.x_lim[1][7]*pi/180, self.x_lim[0][7]*pi/180)
                
             u = np.array([x[12],x[13],x[14],x[15]])
-            xdot = self.calc_xdot(x, u)
+            xdot = self._calc_xdot(x, u)
             
             phi_w = 10
             theta_w = 10
@@ -326,7 +331,7 @@ class F16(gym.Env):
         
         return x_trim, opt
         
-    def linearise(self, x, u, calc_xdot=None, get_obs=None):
+    def linearise(self, x, u, _calc_xdot=None, get_obs=None):
         
         """ Function to linearise the aircraft at a given state vector and input demand.
         This is done by perturbing each state and measuring its effect on every other state.
@@ -341,8 +346,8 @@ class F16(gym.Env):
             4 2D numpy arrays, representing the 4 state space matrices, A,B,C,D.
         """
         
-        if calc_xdot == None:
-            calc_xdot = self.calc_xdot
+        if _calc_xdot == None:
+            _calc_xdot = self._calc_xdot
         if get_obs == None:
             get_obs = self.get_obs
         
@@ -359,7 +364,7 @@ class F16(gym.Env):
             dx = np.zeros([len(x),1])
             dx[i] = eps
             
-            A[:, i] = (calc_xdot(x + dx, u)[:,0] - calc_xdot(x, u)[:,0]) / eps
+            A[:, i] = (_calc_xdot(x + dx, u)[:,0] - _calc_xdot(x, u)[:,0]) / eps
             C[:, i] = (get_obs(x + dx, u) - get_obs(x, u)) / eps
             
         # Perturb each of the input variables and compute linearization
@@ -368,7 +373,7 @@ class F16(gym.Env):
             du = np.zeros([len(u),1])
             du[i] = eps
                     
-            B[:, i] = (calc_xdot(x, u + du)[:,0] - calc_xdot(x, u)[:,0]) / eps
+            B[:, i] = (_calc_xdot(x, u + du)[:,0] - _calc_xdot(x, u)[:,0]) / eps
             D[:, i] = (get_obs(x, u + du) - get_obs(x, u)) / eps
         
         return A, B, C, D   
