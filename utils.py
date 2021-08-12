@@ -20,7 +20,7 @@ import scipy
 
 import ctypes
 
-from parameters import u_cmd_lim, x_lim
+from parameters import u_cmd_lb, u_cmd_ub, u_rate_lb, u_rate_ub, x_lb, x_ub
 
 
 # In[ All expect u in vertical vector format, hzn as a scalar ]
@@ -70,21 +70,31 @@ def gen_cmd_sat_constr_upper_lower(u_len, hzn, lower_limits, upper_limits):
 def gen_OSQP_A(CC, cscm, rlcm):
     return np.concatenate((CC, cscm, rlcm), axis=0)
 
-def setup_OSQP_paras(CC, A, x, hzn, ninputs, x_lim, u_cmd_lim, u_rate_lim):
+def setup_OSQP_paras(CC, A, x, hzn, ninputs, x_ub, x_lb, u_cmd_ub, u_cmd_lb, u_rate_ub, u_rate_lb):
+    
+    """ 
+    args:
+        CC - numpy 2D array
+        A - numpy 2D array
+        x - numpy 2D array (vertical vector)
+        hzn - int
+        ninputs - int
+        x_ub - list
+        the rest - lists
+    """
+    
     cscm = gen_cmd_sat_constr_mat(ninputs, hzn)
     rlcm = gen_rate_lim_constr_mat(ninputs, hzn)
     OSQP_A = gen_OSQP_A(CC, cscm, rlcm)
 
-    x_u = np.array(x_lim[0])
-    x_u = np.concatenate((x_u, np.array([np.infty, u_cmd_lim[0][4]])))[np.newaxis].T
+    x_ub = np.array(x_ub)[np.newaxis].T
+    x_lb = np.array(x_lb)[np.newaxis].T
     
-    x_l = np.array(x_lim[1])
-    x_l = np.concatenate((x_l, np.array([-np.infty, u_cmd_lim[1][4]])))[np.newaxis].T
+    u1 = np.concatenate(([x_ub - A @ x] * hzn))
+    l1 = np.concatenate(([x_lb - A @ x] * hzn))
     
-    u1 = np.concatenate(([x_u - A @ x] * hzn))
-    l1 = np.concatenate(([x_l - A @ x] * hzn))
-    cscl, cscu = gen_cmd_sat_constr_upper_lower(ninputs, hzn, u_cmd_lim[1][1:4], u_cmd_lim[0][1:4])
-    rlcl, rlcu = gen_rate_lim_constr_upper_lower(ninputs, hzn, [-60, -80, -120], [60, 80, 120])
+    cscl, cscu = gen_cmd_sat_constr_upper_lower(ninputs, hzn, u_cmd_lb, u_cmd_ub)
+    rlcl, rlcu = gen_rate_lim_constr_upper_lower(ninputs, hzn, u_rate_lb, u_rate_ub)
     OSQP_l = np.concatenate((l1, cscl, rlcl))
     OSQP_u = np.concatenate((u1, cscu, rlcu))
     
@@ -197,7 +207,7 @@ def upd_lef(h, V, coeff, alpha, lef_state_1, lef_state_2, nlplant):
     lef_cmd = LF_out + 1.45 - atmos_out
     
     # command saturation
-    lef_cmd = np.clip(lef_cmd,u_cmd_lim[1][4],u_cmd_lim[0][4])
+    lef_cmd = np.clip(lef_cmd,x_lb[16],x_ub[16])
     # rate saturation
     lef_err = np.clip((1/0.136) * (lef_cmd - lef_state_2),-25,25)
     
@@ -205,25 +215,25 @@ def upd_lef(h, V, coeff, alpha, lef_state_1, lef_state_2, nlplant):
 
 def upd_thrust(T_cmd, T_state):
     # command saturation
-    T_cmd = np.clip(T_cmd,u_cmd_lim[1][0],u_cmd_lim[0][0])
+    T_cmd = np.clip(T_cmd,u_cmd_lb[0],u_cmd_ub[0])
     # rate saturation
     return np.clip(T_cmd - T_state, -10000, 10000)
 
 def upd_dstab(dstab_cmd, dstab_state):
     # command saturation
-    dstab_cmd = np.clip(dstab_cmd,u_cmd_lim[1][1],u_cmd_lim[0][1])
+    dstab_cmd = np.clip(dstab_cmd,u_cmd_lb[1],u_cmd_ub[1])
     # rate saturation
     return np.clip(20.2*(dstab_cmd - dstab_state), -60, 60)
 
 def upd_ail(ail_cmd, ail_state):
     # command saturation
-    ail_cmd = np.clip(ail_cmd,u_cmd_lim[1][2],u_cmd_lim[0][2])
+    ail_cmd = np.clip(ail_cmd,u_cmd_lb[2],u_cmd_ub[2])
     # rate saturation
     return np.clip(20.2*(ail_cmd - ail_state), -80, 80)
 
 def upd_rud(rud_cmd, rud_state):
     # command saturation
-    rud_cmd = np.clip(rud_cmd,u_cmd_lim[1][3],u_cmd_lim[0][3])
+    rud_cmd = np.clip(rud_cmd,u_cmd_lb[3],u_cmd_ub[3])
     # rate saturation
     return np.clip(20.2*(rud_cmd - rud_state), -120, 120)
 

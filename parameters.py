@@ -15,10 +15,11 @@ from numpy import pi
 from scipy.constants import g
 import os
 from ctypes import CDLL
+from dataclasses import dataclass
 
 # In[simulation parameters]  
 
-time_step, time_start, time_end = 0.001, 0., 3.
+dt, time_start, time_end = 0.001, 0., 3.
 
 # fi_flag = 1 -> high fidelity model (full Nguyen)
 # fi_flag = 1 -> low fidelity model (Stevens Lewis reduced)
@@ -106,18 +107,10 @@ model_predictive_control_parameters = [hzn, pred_dt]
 
 m2f = 3.28084 # metres to feet conversion
 f2m = 1/m2f # feet to metres conversion
-initial_state_vector_ft_rad = np.array([npos*m2f, epos*m2f, h*m2f, phi, theta, psi, vt*m2f, alpha, beta, p, q, r, T, dh, da, dr, lef, -alpha*180/pi])[np.newaxis].T
+x0 = np.array([npos*m2f, epos*m2f, h*m2f, phi, theta, psi, vt*m2f, alpha, beta, p, q, r, T, dh, da, dr, lef, -alpha*180/pi])#[np.newaxis].T
+u0 = np.copy(x0[12:16])
 
-u_cmd_lim = [[T_max, dh_max, da_max, dr_max, lef_max],
-           [T_min, dh_min, da_min, dr_min, lef_min]]
 
-u_rate_lim = [[10000, 60, 80, 120],
-              [-10000, -60, -80, -120]]
-
-x_lim = [[npos_max, epos_max, h_max, phi_max, theta_max, psi_max, V_max, alpha_max, beta_max, p_max, q_max, r_max],
-         [npos_min, epos_min, h_min, phi_min, theta_min, psi_min, V_min, alpha_min, beta_min, p_min, q_min, r_min]]
-
-observed_states = [6,7,8,9,10,11]
 
 if stab_flag == 1:
     so_file = os.getcwd() + "/C/nlplant_xcg35.so"
@@ -125,7 +118,111 @@ elif stab_flag == 0:
     so_file = os.getcwd() + "/C/nlplant_xcg25.so"
 nlplant = CDLL(so_file)
 
-simulation_parameters = [time_step, time_start, time_end, stab_flag, fi_flag, x_lim, u_cmd_lim, u_rate_lim, observed_states, nlplant]
+states = ['npos','epos','h','phi','theta','psi','V','alpha','beta','p','q','r','T','dh','da','dr','lf2','lf1']
+inputs = ['T','dh','da','dr']
+
+x_units = ['ft','ft','ft','rad','rad','rad','ft/s','rad','rad','rad/s','rad/s','rad/s','lb','deg','deg','deg','deg','deg']
+u_units = ['lb','deg','deg','deg']
+
+x_ub = [npos_max, epos_max, h_max, phi_max, theta_max, psi_max, V_max, alpha_max, beta_max, p_max, q_max, r_max, T_max, dh_max, da_max, dr_max, lef_max, np.infty]
+x_lb = [npos_min, epos_min, h_min, phi_min, theta_min, psi_min, V_min, alpha_min, beta_min, p_min, q_min, r_min, T_min, dh_min, da_min, dr_min, lef_min, -np.infty]
+
+u_cmd_ub = [T_max, dh_max, da_max, dr_max]
+u_cmd_lb = [T_min, dh_min, da_min, dr_min]
+
+u_rate_ub = [10000, 60, 80, 120]
+u_rate_lb = [-10000, -60, -80, -120]
+
+# In[mpc control choices]
+
+observed_states = ['V','alpha','beta','p','q','r']
+mpc_states = ['h','phi','theta','V''alpha','beta','p','q','r','lf1','lf2']
+mpc_inputs = ['dh','da','dr']
+
+# In[dataclass wrap]
+
+@dataclass
+class stateVector:
+    states: list
+    values: np.array
+    units: list
+    upper_bound: list
+    lower_bound: list
+    initial_condition: np.array
+    observed_states: list
+    mpc_states: list
+    _obs_x_idx: list = None
+    _mpc_x_idx: list = None
+    _mpc_x_lb: list = None
+    _mpc_x_ub: list = None
+    
+    def __post_init__(self):
+        self._obs_x_idx = [self.states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.states]
+        self._mpc_x_idx = [self.states.index(self.mpc_states[i]) for i in range(len(self.mpc_states)) if self.mpc_states[i] in self.states]
+        self._mpc_x_lb = [self.lower_bound[i] for i in self._mpc_x_idx]
+        self._mpc_x_ub = [self.upper_bound[i] for i in self._mpc_x_idx]
+        self._mpc_obs_x_idx = [self.mpc_states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.mpc_states]
+        
+    def _get_mpc_x(self):
+        return np.array([self.values[i] for i in self._mpc_x_idx])
+        
+@dataclass
+class inputVector:
+    inputs: list
+    values: np.array
+    units: list
+    upper_cmd_bound: list
+    lower_cmd_bound: list
+    upper_rate_bound: list
+    lower_rate_bound: list
+    initial_condition: np.array
+    mpc_inputs: list
+    
+    def __post_init__(self):
+        self._mpc_u_idx = [self.inputs.index(self.mpc_inputs[i]) for i in range(len(mpc_inputs)) if self.mpc_inputs[i] in self.inputs]
+        self._mpc_u_cmd_lb = [self.lower_cmd_bound[i] for i in self._mpc_u_idx]
+        self._mpc_u_cmd_ub = [self.upper_cmd_bound[i] for i in self._mpc_u_idx]
+        self._mpc_u_rate_lb = [self.lower_rate_bound[i] for i in self._mpc_u_idx]
+        self._mpc_u_rate_ub = [self.upper_rate_bound[i] for i in self._mpc_u_idx]
+        
+    def _get_mpc_u(self):
+        return np.array([self.values[i] for i in self._mpc_u_idx])
+    
+@dataclass#(frozen=True)
+class simulationParameters:
+    dt: float
+    time_start: float
+    time_end: float
+    stab_flag: int
+    fi_flag: int
+
+state_vector = stateVector(
+    states,
+    np.copy(x0),
+    x_units,
+    x_ub,
+    x_lb,
+    np.copy(x0),
+    observed_states,
+    mpc_states)    
+
+input_vector = inputVector(
+    inputs,
+    np.copy(u0),
+    u_units,
+    u_cmd_ub,
+    u_cmd_lb,
+    u_rate_ub,
+    u_rate_lb,
+    np.copy(u0),
+    mpc_inputs)       
+       
+simulation_parameters = simulationParameters(
+    dt,
+    time_start,
+    time_end,
+    stab_flag,
+    fi_flag)
 
 # In[additional info provided for brevity]
 
