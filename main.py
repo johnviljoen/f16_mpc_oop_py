@@ -19,7 +19,6 @@ import numpy as np
 from scipy.signal import cont2discrete
 
 from stable_baselines3.common.env_checker import check_env
-
 from sys import exit
 
 paras_mpc = [4,0.001]
@@ -28,7 +27,7 @@ f16 = F16(state_vector, input_vector, simulation_parameters, nlplant)
 # u_opt = f16.calc_MPC_action_mk2(10,10,10,paras_mpc)
 # A,B,C,D = f16.linearise(f16.x, f16.u)
 # A,B,C,D = cont2discrete((A,B,C,D),)
-res, P, q, OSQP_A, OSQP_l, OSQP_u = f16.calc_MPC_action(paras_mpc)
+res, P, q, OSQP_A, OSQP_l, OSQP_u = f16._calc_MPC_action(paras_mpc)
 
 
 

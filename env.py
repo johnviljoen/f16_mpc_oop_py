@@ -288,7 +288,7 @@ class F16(gym.Env):
         
         return A, B, C, D
     
-    def calc_MPC_action(self, paras_mpc):
+    def _calc_MPC_action(self, paras_mpc):
         
         hzn = paras_mpc[0]
         dt = 1
@@ -296,6 +296,8 @@ class F16(gym.Env):
         u = self.u._get_mpc_u()
                 
         A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+        # C[0,3] = 1
+        # return A,B,C,D
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
         
         MM, CC = calc_MC(hzn, A, B, dt)
@@ -306,13 +308,14 @@ class F16(gym.Env):
         K = - dlqr(A, B, Q, R)
         Q_bar = scipy.linalg.solve_discrete_lyapunov((A + B @ K).T, Q + K.T @ R @ K)
         QQ = dmom(Q, hzn)
+        # return QQ
         RR = dmom(R, hzn)
         QQ[-len(x):,-len(x):] = Q_bar
         
         H = CC.T @ QQ @ CC + RR
         F = CC.T @ QQ @ MM
         G = MM.T @ QQ @ MM
-        
+                
         P = 2*H
         q = (2 * x[np.newaxis] @ F.T).T
         

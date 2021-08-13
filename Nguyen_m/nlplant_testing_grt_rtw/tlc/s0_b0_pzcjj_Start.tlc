@@ -1,0 +1,47 @@
+%implements s0_b0_pzcjj_Start "C"
+
+%function Start(block, system) Output
+%assign cfgTxt = ""
+%openfile cfgTxt
+%assign localVarDecl = ""
+%assign tlcSetupRuntimeResourcesFcnOfS0B0 = OpaqueTLCBlockFcn("SetupRuntimeResources", 0, 0, 0, 0, 0)
+%assign tlcSetupRuntimeResourcesFcnOfS0B1 = OpaqueTLCBlockFcn("SetupRuntimeResources", 0, 1, 0, 0, 1)
+%assign tlcSetupRuntimeResourcesFcnOfS0B2 = OpaqueTLCBlockFcn("SetupRuntimeResources", 0, 2, 0, 0, 2)
+%assign tlcSetupRuntimeResourcesFcnOfS0B3 = OpaqueTLCBlockFcn("SetupRuntimeResources", 0, 3, 0, 0, 3)
+%assign tlcSetupRuntimeResourcesFcnOfS0B8 = OpaqueTLCBlockFcn("SetupRuntimeResources", 0, 8, 0, 0, 4)
+%assign tlcSetupRuntimeResourcesFcnOfS0B9 = OpaqueTLCBlockFcn("SetupRuntimeResources", 0, 9, 0, 0, 5)
+%if !WHITE_SPACE(tlcSetupRuntimeResourcesFcnOfS0B0)
+/* SetupRuntimeResources for Scope: '<Root>/Scope' */
+%<tlcSetupRuntimeResourcesFcnOfS0B0>\
+%endif
+%if !WHITE_SPACE(tlcSetupRuntimeResourcesFcnOfS0B1)
+/* SetupRuntimeResources for Scope: '<Root>/Scope1' */
+%<tlcSetupRuntimeResourcesFcnOfS0B1>\
+%endif
+%if !WHITE_SPACE(tlcSetupRuntimeResourcesFcnOfS0B2)
+/* SetupRuntimeResources for Scope: '<Root>/Scope2' */
+%<tlcSetupRuntimeResourcesFcnOfS0B2>\
+%endif
+%if !WHITE_SPACE(tlcSetupRuntimeResourcesFcnOfS0B3)
+/* SetupRuntimeResources for Scope: '<Root>/Scope3' */
+%<tlcSetupRuntimeResourcesFcnOfS0B3>\
+%endif
+%if !WHITE_SPACE(tlcSetupRuntimeResourcesFcnOfS0B8)
+/* SetupRuntimeResources for Scope: '<Root>/Scope4' */
+%<tlcSetupRuntimeResourcesFcnOfS0B8>\
+%endif
+%if !WHITE_SPACE(tlcSetupRuntimeResourcesFcnOfS0B9)
+/* SetupRuntimeResources for Scope: '<Root>/Scope5' */
+%<tlcSetupRuntimeResourcesFcnOfS0B9>\
+%endif
+%closefile cfgTxt
+%<cfgTxt>
+%endfunction
+%function StartFcnProtoType(block, system) Output
+%assign fcnProtoType = ""
+%openfile fcnProtoType
+static void Start(\
+%assign comma = ""
+%closefile fcnProtoType
+%<SLibCG_SetFcnProtoType(0, 0, fcnProtoType)>
+%endfunction

@@ -5,25 +5,17 @@ Created on Wed Jul  7 14:45:08 2021
 
 @author: johnviljoen
 """
-
-
-# import time for tic toc functions
 import time
-
-# import matplotlib for visualisation
 import matplotlib.pyplot as plt
-
 import numpy as np
 from numpy import pi
-
 import scipy
-
 import ctypes
 
 from parameters import u_cmd_lb, u_cmd_ub, u_rate_lb, u_rate_ub, x_lb, x_ub
 
 
-# In[ All expect u in vertical vector format, hzn as a scalar ]
+# In[ OSQP setup functions ]
 
 def gen_rate_lim_constr_mat(u_len, hzn):
     
@@ -80,7 +72,14 @@ def setup_OSQP_paras(CC, A, x, hzn, ninputs, x_ub, x_lb, u_cmd_ub, u_cmd_lb, u_r
         hzn - int
         ninputs - int
         x_ub - list
-        the rest - lists
+        x_lb - list
+        u_cmd_ub - list
+        u_cmd_lb - list
+        u_rate_ub - list
+        u_rate_lb - list
+        
+    returns:
+        
     """
     
     cscm = gen_cmd_sat_constr_mat(ninputs, hzn)
@@ -101,7 +100,7 @@ def setup_OSQP_paras(CC, A, x, hzn, ninputs, x_ub, x_lb, u_cmd_ub, u_cmd_lb, u_r
     return OSQP_A, OSQP_l, OSQP_u
     
 
-# In[]
+# In[ Calculate the MM, CC matrices -> squiggly M and squiggly C in the notes ]
 def calc_MC(hzn, A, B, dt):
 
     # hzn is the horizon
@@ -126,7 +125,7 @@ def calc_MC(hzn, A, B, dt):
 
     return MM, CC
 
-# In[]
+# In[ discrete linear quadratic regulator ]
 # from https://github.com/python-control/python-control/issues/359:
 def dlqr(A,B,Q,R):
     """
@@ -156,7 +155,7 @@ def dlqr(A,B,Q,R):
     K = np.matrix(scipy.linalg.inv(B.T @ P @ B+R) @ (B.T @ P @ A))
     return K
 
-# In[]
+# In[ degenerate 2D square matrix ]
 
 def square_mat_degen_2d(mat, degen_idx):
     
@@ -168,7 +167,7 @@ def square_mat_degen_2d(mat, degen_idx):
         
     return degen_mat
 
-# In[]
+# In[ diagonal matrix of matrices ]
 
 # def gmim(mat, submat_dims):
 #     # get matrix in matrix -> gmim
@@ -192,7 +191,7 @@ def dmom(mat, num_mats):
                 
     return matomats
 
-# In[]
+# In[ calculate actuator model time derivatives ]
 
 def upd_lef(h, V, coeff, alpha, lef_state_1, lef_state_2, nlplant):
     
@@ -237,7 +236,7 @@ def upd_rud(rud_cmd, rud_state):
     # rate saturation
     return np.clip(20.2*(rud_cmd - rud_state), -120, 120)
 
-# In[]
+# In[ replicate MATLAB tic toc functions ]
 
 def TicTocGenerator():
     # Generator that returns time differences
@@ -261,7 +260,7 @@ def tic():
     # Records a time in TicToc, marks the beginning of a time interval
     toc(False)
     
-# In[]
+# In[ visualise full 18 DoF system time history ]
 
 def vis(x_storage, rng):
 

@@ -1,0 +1,16 @@
+close all
+clear all
+clc
+
+npos = 0;
+epos = 0;
+h = 10000;
+phi = 0;
+theta = 0;
+psi = 0;
+V = 700;
+alpha = 0;
+beta = 0;
+
+
+xu = []

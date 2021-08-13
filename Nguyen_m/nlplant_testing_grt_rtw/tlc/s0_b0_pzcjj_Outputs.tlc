@@ -1,0 +1,86 @@
+%implements s0_b0_pzcjj_Outputs "C"
+
+%function Outputs(block, system) Output
+%assign cfgTxt = ""
+%openfile cfgTxt
+%assign localVarDecl = ""
+%assign tlcOutputsFcnOfS0B0 = OpaqueTLCBlockFcn("Outputs", 0, 0, 0, 2, 0)
+%assign tlcOutputsFcnOfS0B1 = OpaqueTLCBlockFcn("Outputs", 0, 1, 0, 2, 1)
+%assign tlcOutputsFcnOfS0B2 = OpaqueTLCBlockFcn("Outputs", 0, 2, 0, 2, 2)
+%assign tlcOutputsFcnOfS0B3 = OpaqueTLCBlockFcn("Outputs", 0, 3, 0, 2, 3)
+%assign tlcOutputsFcnOfS0B7 = OpaqueTLCBlockFcn("Outputs", 0, 7, 0, 2, 4)
+%assign tlcOutputsFcnOfS0B8 = OpaqueTLCBlockFcn("Outputs", 0, 8, 0, 2, 5)
+%assign tlcOutputsFcnOfS0B9 = OpaqueTLCBlockFcn("Outputs", 0, 9, 0, 2, 6)
+/* {S!d26}Integrator: '<Root>/Integrate  F16 State Derivatives' */
+memcpy(&nlplant_testing_B.IntegrateF16StateDerivatives[0], &nlplant_testing_X.IntegrateF16StateDerivatives_CS[0], 12U * sizeof(real_T));
+if (%<(SLibCGIRIsSampleHit(1, 0))>) {
+%if !WHITE_SPACE(tlcOutputsFcnOfS0B0)
+    /* {S!d28}Scope: '<Root>/Scope' */
+%<tlcOutputsFcnOfS0B0>\
+%endif
+}
+/* {S!d30}Gain: '<S1>/r2d' */
+nlplant_testing_B.r2d = nlplant_testing_P.r2d_Gain * nlplant_testing_B.IntegrateF16StateDerivatives[3];
+/* {S!d32}Gain: '<S1>/r2d1' */
+nlplant_testing_B.r2d1 = nlplant_testing_P.r2d1_Gain * nlplant_testing_B.IntegrateF16StateDerivatives[4];
+/* {S!d34}Gain: '<S1>/r2d2' */
+nlplant_testing_B.r2d2 = nlplant_testing_P.r2d2_Gain * nlplant_testing_B.IntegrateF16StateDerivatives[5];
+if (%<(SLibCGIRIsSampleHit(1, 0))>) {
+%if !WHITE_SPACE(tlcOutputsFcnOfS0B1)
+    /* {S!d36}Scope: '<Root>/Scope1' */
+%<tlcOutputsFcnOfS0B1>\
+%endif
+}
+/* {S!d38}Gain: '<S1>/r2d3' */
+nlplant_testing_B.r2d3 = nlplant_testing_P.r2d3_Gain * nlplant_testing_B.IntegrateF16StateDerivatives[7];
+/* {S!d40}Gain: '<S1>/r2d4' */
+nlplant_testing_B.r2d4 = nlplant_testing_P.r2d4_Gain * nlplant_testing_B.IntegrateF16StateDerivatives[8];
+if (%<(SLibCGIRIsSampleHit(1, 0))>) {
+%if !WHITE_SPACE(tlcOutputsFcnOfS0B2)
+    /* {S!d42}Scope: '<Root>/Scope2' */
+%<tlcOutputsFcnOfS0B2>\
+%endif
+}
+/* {S!d44}Gain: '<S1>/r2d5' */
+nlplant_testing_B.r2d5 = nlplant_testing_P.r2d5_Gain * nlplant_testing_B.IntegrateF16StateDerivatives[9];
+/* {S!d46}Gain: '<S1>/r2d6' */
+nlplant_testing_B.r2d6 = nlplant_testing_P.r2d6_Gain * nlplant_testing_B.IntegrateF16StateDerivatives[10];
+/* {S!d48}Gain: '<S1>/r2d7' */
+nlplant_testing_B.r2d7 = nlplant_testing_P.r2d7_Gain * nlplant_testing_B.IntegrateF16StateDerivatives[11];
+if (%<(SLibCGIRIsSampleHit(1, 0))>) {
+%if !WHITE_SPACE(tlcOutputsFcnOfS0B3)
+    /* {S!d50}Scope: '<Root>/Scope3' */
+%<tlcOutputsFcnOfS0B3>\
+%endif
+}
+%if !WHITE_SPACE(tlcOutputsFcnOfS0B7)
+/* {S!d52}MATLABFcn: '<Root>/F16 nlsim nlplant' incorporates:
+ *  Constant: '<Root>/Constant'
+ *  Constant: '<Root>/Constant1'
+ *  Constant: '<Root>/Fidelity Flag'
+ */
+%<tlcOutputsFcnOfS0B7>\
+%endif
+if (%<(SLibCGIRIsSampleHit(1, 0))>) {
+%if !WHITE_SPACE(tlcOutputsFcnOfS0B8)
+    /* {S!d54}Scope: '<Root>/Scope4' */
+%<tlcOutputsFcnOfS0B8>\
+%endif
+%if !WHITE_SPACE(tlcOutputsFcnOfS0B9)
+    /* {S!d56}Scope: '<Root>/Scope5' */
+%<tlcOutputsFcnOfS0B9>\
+%endif
+}
+%<SLibInsertSolverResetCode()>\
+%closefile cfgTxt
+%<cfgTxt>
+%<LibSetSystemField(system, "CachedOutputLocalVars", localVarDecl)>
+%endfunction
+%function OutputsFcnProtoType(block, system) Output
+%assign fcnProtoType = ""
+%openfile fcnProtoType
+static void Outputs(\
+%assign comma = ""
+%closefile fcnProtoType
+%<SLibCG_SetFcnProtoType(0, 2, fcnProtoType)>
+%endfunction
