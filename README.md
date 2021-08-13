@@ -35,6 +35,8 @@ The F16 class is instantiated in main.py as f16 as of time of writing. -> run ma
 
 All parameters are stored in 'parameters.py', stateVector, inputVector, and simulationParameter dataclasses are also instantiated here and used to instantiate the F16 class. These dataclasses contain things like the units, limits, names, initial conditions, of the state vector and input vector.
 
+There are examples from notes found here: https://markcannon.github.io/assets/downloads/teaching/C21_Model_Predictive_Control/mpc_notes.pdf, that have been implemented with the same algorithm in 'notes_examples/example_2_x.py'.
+
 # Credits
 
 This simulation is based upon two works:
