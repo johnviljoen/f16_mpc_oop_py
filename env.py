@@ -122,18 +122,25 @@ class F16(gym.Env):
                 numpy 2D array (vertical vector) of 14 elements
                 time derivatives of {xe,ye,h,phi,theta,psi,V,alpha,beta,p,q,r,lf1,lf2}
         """
-        x = np.array([0, 0, x[0], x[1], x[2], 0, x[3] ,x[4], x[5], x[6], x[7], x[8], x[9], x[10]])
+        state_vector = np.zeros(18)
+        
+        for i in range(len(self.x._mpc_x_idx)):
+            state_vector[self.x._mpc_x_idx[i]] = x[i]
+            
+        state_vector[12:16] = u
+                                
         # initialise variables
         xdot = np.zeros(18)
         coeff = np.zeros(3)
         C_input_x = np.zeros(18)
         #--------leading edge flap model---------#
-        lf_state1_dot, lf_state2_dot = upd_lef(x[2], x[6], coeff, x[7], x[12], x[13], self.nlplant)
+        lf_state1_dot, lf_state2_dot = upd_lef(state_vector[2], state_vector[6], coeff, state_vector[7], state_vector[12], state_vector[13], self.nlplant)
         #----------run nlplant for xdot----------#
-        C_input_x = np.concatenate((x[0:12],u,x[13:14]))
-        self.nlplant.Nlplant(ctypes.c_void_p(C_input_x.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(self.paras.fi_flag))    
+        # C_input_x = np.concatenate((x[0:12],u,x[13:14]))
+        self.nlplant.Nlplant(ctypes.c_void_p(state_vector.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(self.paras.fi_flag))    
         #----------assign actuator xdots---------#
-        return np.concatenate((xdot[2:5], xdot[6:12], np.array([lf_state1_dot, lf_state2_dot])))
+        state_vector_dot = np.concatenate((xdot[0:12],u,np.array([lf_state1_dot, lf_state2_dot])))
+        return np.array([xdot[i] for i in self.x._mpc_x_idx])
     
     def _get_obs_na(self, x, u):
         return np.copy(np.array(list(x[i] for i in self.x._mpc_obs_x_idx), dtype='float32').flatten())
@@ -266,7 +273,7 @@ class F16(gym.Env):
             
             dx = np.zeros([len(x)])
             dx[i] = eps
-            
+                        
             A[:, i] = (_calc_xdot(x + dx, u) - _calc_xdot(x, u)) / eps
             C[:, i] = (get_obs(x + dx, u) - get_obs(x, u)) / eps
             
@@ -287,7 +294,7 @@ class F16(gym.Env):
         dt = 1
         x = self.x._get_mpc_x()
         u = self.u._get_mpc_u()
-        
+                
         A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
         

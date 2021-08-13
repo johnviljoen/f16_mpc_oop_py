@@ -136,8 +136,8 @@ u_rate_lb = [-10000, -60, -80, -120]
 # In[mpc control choices]
 
 observed_states = ['V','alpha','beta','p','q','r']
-mpc_states = ['h','phi','theta','V''alpha','beta','p','q','r','lf1','lf2']
-mpc_inputs = ['dh','da','dr']
+mpc_states = ['h','phi','theta','V','alpha','beta','p','q','r','lf1','lf2']
+mpc_inputs = ['T','dh','da','dr']
 
 # In[dataclass wrap]
 
