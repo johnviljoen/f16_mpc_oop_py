@@ -12,68 +12,17 @@ from numpy import pi
 import scipy
 import ctypes
 
-from parameters import u_cmd_lb, u_cmd_ub, u_rate_lb, u_rate_ub, x_lb, x_ub
+from parameters import u_lb, u_ub, udot_lb, udot_ub, x_lb, x_ub
 
-
-# In[ OSQP setup functions mk2 ]
-
-def gen_state_constr(x, lb, ub, hzn, MM):
-    
-    # only generate the limits as the matrix multiplying the sequence of inputs
-    # is already known to be CC.
-    
-    nstates = len(x)
-        
-    lb = np.tile(lb,(hzn+1,1))    
-    ub = np.tile(ub,(hzn+1,1))
-    
-    state_constr_lower = lb - MM @ x
-    state_constr_upper = ub - MM @ x
-    
-    return state_constr_lower, state_constr_upper
-
-def gen_cmd_constr(hzn, lb, ub):
-    
-    # returns stacked lower, upper bounds, identity for multiplying sequence of inputs
-    
-    return np.tile(lb,(hzn+1,1)), np.tile(ub,(hzn+1,1)), np.eye(len(ub)*hzn)
-
-def gen_cmd_rate_constr(u_len, hzn, lb, ub):
-    
-    lb = np.concatenate((np.ones([u_len,1])*-np.infty,np.tile(lb,(hzn,1))))
-    ub = np.concatenate((np.ones([u_len,1])*np.infty,np.tile(ub,(hzn,1))))
-    
-    rate_lim_constr_mat = np.eye(u_len*hzn)
-    
-    for i in range(u_len*hzn):
-        if i >= u_len:
-            rate_lim_constr_mat[i,i-u_len] = -1
-            
-    return lb, ub, rate_lim_constr_mat
-
-def gen_OSQP_A(CC, cscm, rlcm):
-    
-    return np.concatenate((CC, cscm, rlcm), axis=0)
 
 # In[]
 
-def setup_OSQP(x, x_lb, x_ub, hzn, MM, CC, u_lb, u_ub, udot_lb, udot_ub, u_len):
+def setup_OSQP(A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub, udot_lb, udot_ub):
     
     """
-    There are three constraints to be enforced on the system:
-        
-        state constraints:
-            x(n+1) = Ax(n) + Bu(n)
-            
-        input command limit constraints:
-            u_min <= u <= u_max
-            
-        input command rate limit constraints:
-            udot_min <= udot <= udot_max
-            
     args:
         x:
-            2D numpy array -> vertical vector
+            1D numpy array -> horizontal vector
         x_lb:
             2D numpy array -> vertical vector
         x_ub:
@@ -94,42 +43,77 @@ def setup_OSQP(x, x_lb, x_ub, hzn, MM, CC, u_lb, u_ub, udot_lb, udot_ub, u_len):
             2D numpy array -> vertical vector
         u_len:
             int
-        
             
     """
     
-    nstates = len(x)
+    # number of states, inputs = m, n
+    m = len(x)
+    n = len(act_states)
+    
+    MM, CC = calc_MC(A, B, dt, hzn)
+    
+    K = - dlqr(A, B, Q, R)
+    Q_bar = scipy.linalg.solve_discrete_lyapunov((A + B @ K).T, Q + K.T @ R @ K)
+    QQ = dmom(Q, hzn)
+    QQ[-m:,-m:] = Q_bar
+    
+    RR = dmom(R, hzn)
+    
+    H = CC.T @ QQ @ CC + RR
+    F = CC.T @ QQ @ MM
+    G = MM.T @ QQ @ MM
+    
+    OSQP_P = 2*H
+    OSQP_q = (2 * x[np.newaxis] @ F.T).T
+    
+    """
+    There are three constraints to be enforced on the system:
+        
+        state constraints:
+            x(n+1) = Ax(n) + Bu(n)
+            
+        input command limit constraints:
+            u_min <= u <= u_max
+            
+        input command rate limit constraints:
+            udot_min <= udot <= udot_max
+    """
     
     # calculate state constraint limits vector
         
-    x_lb = np.tile(x_lb,(hzn+1,1))    
-    x_ub = np.tile(x_ub,(hzn+1,1))
+    x_lb = np.tile(x_lb,(hzn,1))    
+    x_ub = np.tile(x_ub,(hzn,1))
     
-    state_constr_lower = x_lb - MM @ x
-    state_constr_upper = x_ub - MM @ x
+    state_constr_lower = x_lb - MM @ x[np.newaxis].T
+    state_constr_upper = x_ub - MM @ x[np.newaxis].T
     
     # the state constraint input sequence matrix is just CC
     
     # calculate the command saturation limits vector
     
-    cmd_constr_lower = np.tile(u_lb,(hzn+1,1))
-    cmd_constr_upper = np.tile(u_ub,(hzn+1,1))
+    cmd_constr_lower = np.tile(u_lb,(hzn,1))
+    cmd_constr_upper = np.tile(u_ub,(hzn,1))
     
     # calculate the command saturation input sequence matrix -> just eye
     
-    cmd_constr_mat = np.eye(u_len*hzn)
+    cmd_constr_mat = np.eye(n*hzn)
     
     # calculate the command rate saturation limits vector
     
-    cmd_rate_constr_lower = np.concatenate((np.ones([u_len,1])*-np.infty,np.tile(udot_lb,(hzn,1))))
-    cmd_rate_constr_upper = np.concatenate((np.ones([u_len,1])*np.infty,np.tile(udot_ub,(hzn,1))))
+    u0_rate_constr_lower = act_states[np.newaxis].T + udot_lb
+    u0_rate_constr_upper = act_states[np.newaxis].T + udot_ub
+    
+    cmd_rate_constr_lower = np.concatenate((u0_rate_constr_lower,np.tile(udot_lb,(hzn-1,1))))
+    cmd_rate_constr_upper = np.concatenate((u0_rate_constr_upper,np.tile(udot_ub,(hzn-1,1))))
     
     # calculate the command rate saturation input sequence matrix
     
-    cmd_rate_constr_mat = np.eye(u_len*hzn)
-    for i in range(u_len*hzn):
-        if i >= u_len:
-            cmd_rate_constr_mat[i,i-u_len] = -1
+    cmd_rate_constr_mat = np.eye(n*hzn)
+    for i in range(n*hzn):
+        if i >= n:
+            cmd_rate_constr_mat[i,i-n] = -1
+            
+    # assemble the complete matrices to send to OSQP
             
     OSQP_A = np.concatenate((CC, cmd_constr_mat, cmd_rate_constr_mat), axis=0)
             
@@ -137,13 +121,13 @@ def setup_OSQP(x, x_lb, x_ub, hzn, MM, CC, u_lb, u_ub, udot_lb, udot_ub, u_len):
     
     OSQP_u = np.concatenate((state_constr_upper, cmd_constr_upper, cmd_rate_constr_upper))
     
-    return OSQP_A, OSQP_l, OSQP_u
+    return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
 
     
 
 # In[ Calculate the MM, CC matrices -> squiggly M and squiggly C in the notes ]
 
-def calc_MC(A, B, dt, hzn):
+def calc_MC(A, B, dt, hzn, includeFirstRow=False):
     
     # hzn is the horizon
     nstates = A.shape[0]
@@ -165,94 +149,95 @@ def calc_MC(A, B, dt, hzn):
             else:
                 CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = Bz
                 
-    CC = np.concatenate((np.zeros([nstates,ninputs*hzn]), CC), axis=0)
-    MM = np.concatenate((np.eye(nstates), MM), axis=0)
+    if includeFirstRow:
+        CC = np.concatenate((np.zeros([nstates,ninputs*hzn]), CC), axis=0)
+        MM = np.concatenate((np.eye(nstates), MM), axis=0)
 
     return MM, CC
 
 # In[ OSQP setup functions ]
 
-def gen_rate_lim_constr_mat(u_len, hzn):
+# def gen_rate_lim_constr_mat(u_len, hzn):
     
-    rate_lim_constr_mat = np.eye(u_len*hzn)
+#     rate_lim_constr_mat = np.eye(u_len*hzn)
     
-    for i in range(u_len*hzn):
-        if i >= u_len:
-            rate_lim_constr_mat[i,i-u_len] = -1
+#     for i in range(u_len*hzn):
+#         if i >= u_len:
+#             rate_lim_constr_mat[i,i-u_len] = -1
             
-    return rate_lim_constr_mat
+#     return rate_lim_constr_mat
 
-def gen_rate_lim_constr_upper_lower(u_len, hzn, lower_limits, upper_limits):
+# def gen_rate_lim_constr_upper_lower(u_len, hzn, lower_limits, upper_limits):
     
-    rlcl = np.zeros([u_len*hzn,1])
-    rlcu = np.zeros([u_len*hzn,1])
+#     rlcl = np.zeros([u_len*hzn,1])
+#     rlcu = np.zeros([u_len*hzn,1])
     
-    rlcl[0:u_len,0] = -np.infty
-    rlcu[0:u_len,0] = np.infty
+#     rlcl[0:u_len,0] = -np.infty
+#     rlcu[0:u_len,0] = np.infty
     
-    for i in range(hzn):
-        if i >= 1:
-            for j in range(u_len):
-                rlcl[u_len*i+j,0] = lower_limits[j]
-                rlcu[u_len*i+j,0] = upper_limits[j]
+#     for i in range(hzn):
+#         if i >= 1:
+#             for j in range(u_len):
+#                 rlcl[u_len*i+j,0] = lower_limits[j]
+#                 rlcu[u_len*i+j,0] = upper_limits[j]
             
-    return rlcl, rlcu
+#     return rlcl, rlcu
     
-def gen_cmd_sat_constr_mat(u_len, hzn):
+# def gen_cmd_sat_constr_mat(u_len, hzn):
     
-    return dmom(np.eye(u_len), hzn)
+#     return dmom(np.eye(u_len), hzn)
 
-def gen_cmd_sat_constr_upper_lower(u_len, hzn, lower_limits, upper_limits):
+# def gen_cmd_sat_constr_upper_lower(u_len, hzn, lower_limits, upper_limits):
     
-    cscl = np.zeros([u_len*hzn,1])
-    cscu = np.zeros([u_len*hzn,1])
+#     cscl = np.zeros([u_len*hzn,1])
+#     cscu = np.zeros([u_len*hzn,1])
     
-    for i in range(hzn):
-        for j in range(u_len):
-            cscl[u_len*i + j,0] = lower_limits[j]
-            cscu[u_len*i + j,0] = upper_limits[j]
+#     for i in range(hzn):
+#         for j in range(u_len):
+#             cscl[u_len*i + j,0] = lower_limits[j]
+#             cscu[u_len*i + j,0] = upper_limits[j]
             
-    return cscl, cscu
+#     return cscl, cscu
 
-def gen_OSQP_A(CC, cscm, rlcm):
-    return np.concatenate((CC, cscm, rlcm), axis=0)
+# def gen_OSQP_A(CC, cscm, rlcm):
+#     return np.concatenate((CC, cscm, rlcm), axis=0)
 
-def setup_OSQP_paras(CC, A, x, hzn, ninputs, x_ub, x_lb, u_cmd_ub, u_cmd_lb, u_rate_ub, u_rate_lb):
+# def setup_OSQP_paras(CC, A, x, hzn, ninputs, x_ub, x_lb, u_ub, u_lb, udot_ub, udot_lb):
     
-    """ 
-    args:
-        CC - numpy 2D array
-        A - numpy 2D array
-        x - numpy 2D array (vertical vector)
-        hzn - int
-        ninputs - int
-        x_ub - list
-        x_lb - list
-        u_cmd_ub - list
-        u_cmd_lb - list
-        u_rate_ub - list
-        u_rate_lb - list
+#     """ 
+#     args:
+#         CC - numpy 2D array
+#         A - numpy 2D array
+#         x - numpy 2D array (vertical vector)
+#         hzn - int
+#         ninputs - int
+#         x_ub - list
+#         x_lb - list
+#         u_ub - list
+#         u_lb - list
+#         udot_ub - list
+#         udot_lb - list
         
-    returns:
+#     returns:
         
-    """
+#     """
     
-    cscm = gen_cmd_sat_constr_mat(ninputs, hzn)
-    rlcm = gen_rate_lim_constr_mat(ninputs, hzn)
-    OSQP_A = gen_OSQP_A(CC, cscm, rlcm)
+#     cscm = gen_cmd_sat_constr_mat(ninputs, hzn)
+#     rlcm = gen_rate_lim_constr_mat(ninputs, hzn)
+#     OSQP_A = gen_OSQP_A(CC, cscm, rlcm)
 
-    x_ub = np.array(x_ub)[np.newaxis].T
-    x_lb = np.array(x_lb)[np.newaxis].T
+#     x_ub = np.array(x_ub)[np.newaxis].T
+#     x_lb = np.array(x_lb)[np.newaxis].T
     
-    u1 = np.concatenate(([x_ub - A @ x] * hzn))
-    l1 = np.concatenate(([x_lb - A @ x] * hzn))
+#     u1 = np.concatenate(([x_ub - A @ x] * hzn))
+#     l1 = np.concatenate(([x_lb - A @ x] * hzn))
     
-    cscl, cscu = gen_cmd_sat_constr_upper_lower(ninputs, hzn, u_cmd_lb, u_cmd_ub)
-    rlcl, rlcu = gen_rate_lim_constr_upper_lower(ninputs, hzn, u_rate_lb, u_rate_ub)
-    OSQP_l = np.concatenate((l1, cscl, rlcl))
-    OSQP_u = np.concatenate((u1, cscu, rlcu))
+#     cscl, cscu = gen_cmd_sat_constr_upper_lower(ninputs, hzn, u_lb, u_ub)
+#     rlcl, rlcu = gen_rate_lim_constr_upper_lower(ninputs, hzn, udot_lb, udot_ub)
+#     OSQP_l = np.concatenate((l1, cscl, rlcl))
+#     OSQP_u = np.concatenate((u1, cscu, rlcu))
     
-    return OSQP_A, OSQP_l, OSQP_u
+#     return OSQP_A, OSQP_l, OSQP_u
     
 
 
@@ -351,25 +336,25 @@ def upd_lef(h, V, coeff, alpha, lef_state_1, lef_state_2, nlplant):
 
 def upd_thrust(T_cmd, T_state):
     # command saturation
-    T_cmd = np.clip(T_cmd,u_cmd_lb[0],u_cmd_ub[0])
+    T_cmd = np.clip(T_cmd,u_lb[0],u_ub[0])
     # rate saturation
     return np.clip(T_cmd - T_state, -10000, 10000)
 
 def upd_dstab(dstab_cmd, dstab_state):
     # command saturation
-    dstab_cmd = np.clip(dstab_cmd,u_cmd_lb[1],u_cmd_ub[1])
+    dstab_cmd = np.clip(dstab_cmd,u_lb[1],u_ub[1])
     # rate saturation
     return np.clip(20.2*(dstab_cmd - dstab_state), -60, 60)
 
 def upd_ail(ail_cmd, ail_state):
     # command saturation
-    ail_cmd = np.clip(ail_cmd,u_cmd_lb[2],u_cmd_ub[2])
+    ail_cmd = np.clip(ail_cmd,u_lb[2],u_ub[2])
     # rate saturation
     return np.clip(20.2*(ail_cmd - ail_state), -80, 80)
 
 def upd_rud(rud_cmd, rud_state):
     # command saturation
-    rud_cmd = np.clip(rud_cmd,u_cmd_lb[3],u_cmd_ub[3])
+    rud_cmd = np.clip(rud_cmd,u_lb[3],u_ub[3])
     # rate saturation
     return np.clip(20.2*(rud_cmd - rud_state), -120, 120)
 

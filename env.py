@@ -288,6 +288,39 @@ class F16(gym.Env):
         
         return A, B, C, D
     
+    def _calc_MPC_action_mk2(self):
+        
+        hzn = 3
+        dt = 0.001
+        x = self.x._get_mpc_x()
+        u = self.u._get_mpc_u()
+        act_states = self.x._get_mpc_act_states()        
+        
+        A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+        A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
+        
+        Q = C.T @ C
+        R = np.eye(len(u)) * 0.01 # incredibly sensitive
+        
+        # return A, B, Q, R, hzn, dt, x, act_states,\
+        #     self.x._vec_mpc_x_lb,\
+        #     self.x._vec_mpc_x_ub,\
+        #     self.u._vec_mpc_u_lb,\
+        #     self.u._vec_mpc_u_ub,\
+        #     self.u._vec_mpc_udot_lb,\
+        #     self.u._vec_mpc_udot_ub
+        
+        OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = setup_OSQP(
+            A, B, Q, R, hzn, dt, x, u,\
+            self.x._vec_mpc_x_lb,\
+            self.x._vec_mpc_x_ub,\
+            self.u._vec_mpc_u_lb,\
+            self.u._vec_mpc_u_ub,\
+            self.u._vec_mpc_udot_lb,\
+            self.u._vec_mpc_udot_ub)
+        
+        return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
+
     def _calc_MPC_action(self, paras_mpc):
         
         hzn = paras_mpc[0]

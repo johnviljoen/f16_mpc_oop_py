@@ -21,15 +21,21 @@ from scipy.signal import cont2discrete
 from stable_baselines3.common.env_checker import check_env
 from sys import exit
 
+from scipy.sparse import csc_matrix
+import osqp
+
 paras_mpc = [4,0.001]
 
 f16 = F16(state_vector, input_vector, simulation_parameters, nlplant)
 # u_opt = f16.calc_MPC_action_mk2(10,10,10,paras_mpc)
 # A,B,C,D = f16.linearise(f16.x, f16.u)
 # A,B,C,D = cont2discrete((A,B,C,D),)
-Q_bar = f16._calc_MPC_action(paras_mpc)
+# A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub, udot_lb, udot_ub = f16._calc_MPC_action_mk2()
+OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = f16._calc_MPC_action_mk2()
 
-
+m = osqp.OSQP()
+m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=True)
+res = m.solve()
 
 
 exit()

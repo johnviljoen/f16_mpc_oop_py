@@ -127,11 +127,11 @@ u_units = ['lb','deg','deg','deg']
 x_ub = [npos_max, epos_max, h_max, phi_max, theta_max, psi_max, V_max, alpha_max, beta_max, p_max, q_max, r_max, T_max, dh_max, da_max, dr_max, lef_max, np.infty]
 x_lb = [npos_min, epos_min, h_min, phi_min, theta_min, psi_min, V_min, alpha_min, beta_min, p_min, q_min, r_min, T_min, dh_min, da_min, dr_min, lef_min, -np.infty]
 
-u_cmd_ub = [T_max, dh_max, da_max, dr_max]
-u_cmd_lb = [T_min, dh_min, da_min, dr_min]
+u_ub = [T_max, dh_max, da_max, dr_max]
+u_lb = [T_min, dh_min, da_min, dr_min]
 
-u_rate_ub = [10000, 60, 80, 120]
-u_rate_lb = [-10000, -60, -80, -120]
+udot_ub = [10000, 60, 80, 120]
+udot_lb = [-10000, -60, -80, -120]
 
 # In[mpc control choices]
 
@@ -151,6 +151,7 @@ class stateVector:
     initial_condition: np.array
     observed_states: list
     mpc_states: list
+    mpc_inputs: list = None
     _obs_x_idx: list = None
     _mpc_x_idx: list = None
     _mpc_x_lb: list = None
@@ -159,12 +160,19 @@ class stateVector:
     def __post_init__(self):
         self._obs_x_idx = [self.states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.states]
         self._mpc_x_idx = [self.states.index(self.mpc_states[i]) for i in range(len(self.mpc_states)) if self.mpc_states[i] in self.states]
+        self._mpc_u_states_idx = [self.states.index(self.mpc_inputs[i]) for i in range(len(self.mpc_inputs)) if self.mpc_inputs[i] in self.states]
         self._mpc_x_lb = [self.lower_bound[i] for i in self._mpc_x_idx]
         self._mpc_x_ub = [self.upper_bound[i] for i in self._mpc_x_idx]
         self._mpc_obs_x_idx = [self.mpc_states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.mpc_states]
+        self._vec_mpc_x_lb = np.array(self._mpc_x_lb)[np.newaxis].T
+        self._vec_mpc_x_ub = np.array(self._mpc_x_ub)[np.newaxis].T
         
     def _get_mpc_x(self):
         return np.array([self.values[i] for i in self._mpc_x_idx])
+    
+    def _get_mpc_act_states(self):
+        return np.array([self.values[i] for i in self._mpc_u_states_idx])
+    
         
 @dataclass
 class inputVector:
@@ -180,10 +188,14 @@ class inputVector:
     
     def __post_init__(self):
         self._mpc_u_idx = [self.inputs.index(self.mpc_inputs[i]) for i in range(len(mpc_inputs)) if self.mpc_inputs[i] in self.inputs]
-        self._mpc_u_cmd_lb = [self.lower_cmd_bound[i] for i in self._mpc_u_idx]
-        self._mpc_u_cmd_ub = [self.upper_cmd_bound[i] for i in self._mpc_u_idx]
-        self._mpc_u_rate_lb = [self.lower_rate_bound[i] for i in self._mpc_u_idx]
-        self._mpc_u_rate_ub = [self.upper_rate_bound[i] for i in self._mpc_u_idx]
+        self._mpc_u_lb = [self.lower_cmd_bound[i] for i in self._mpc_u_idx]
+        self._mpc_u_ub = [self.upper_cmd_bound[i] for i in self._mpc_u_idx]
+        self._mpc_udot_lb = [self.lower_rate_bound[i] for i in self._mpc_u_idx]
+        self._mpc_udot_ub = [self.upper_rate_bound[i] for i in self._mpc_u_idx]
+        self._vec_mpc_u_lb = np.array(self._mpc_u_lb)[np.newaxis].T
+        self._vec_mpc_u_ub = np.array(self._mpc_u_ub)[np.newaxis].T
+        self._vec_mpc_udot_lb = np.array(self._mpc_udot_lb)[np.newaxis].T
+        self._vec_mpc_udot_ub = np.array(self._mpc_udot_ub)[np.newaxis].T
         
     def _get_mpc_u(self):
         return np.array([self.values[i] for i in self._mpc_u_idx])
@@ -204,16 +216,17 @@ state_vector = stateVector(
     x_lb,
     np.copy(x0),
     observed_states,
-    mpc_states)    
+    mpc_states,
+    mpc_inputs)    
 
 input_vector = inputVector(
     inputs,
     np.copy(u0),
     u_units,
-    u_cmd_ub,
-    u_cmd_lb,
-    u_rate_ub,
-    u_rate_lb,
+    u_ub,
+    u_lb,
+    udot_ub,
+    udot_lb,
     np.copy(u0),
     mpc_inputs)       
        
