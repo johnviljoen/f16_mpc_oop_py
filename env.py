@@ -304,18 +304,18 @@ class F16(gym.Env):
         
         Q = C.T @ C
         R = np.eye(len(u)) * 0.01 # incredibly sensitive
-        
+                
         K = - dlqr(A, B, Q, R)
         Q_bar = scipy.linalg.solve_discrete_lyapunov((A + B @ K).T, Q + K.T @ R @ K)
         QQ = dmom(Q, hzn)
         # return QQ
         RR = dmom(R, hzn)
         QQ[-len(x):,-len(x):] = Q_bar
-        
+                
         H = CC.T @ QQ @ CC + RR
         F = CC.T @ QQ @ MM
         G = MM.T @ QQ @ MM
-                
+        
         P = 2*H
         q = (2 * x[np.newaxis] @ F.T).T
         

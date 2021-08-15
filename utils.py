@@ -15,6 +15,161 @@ import ctypes
 from parameters import u_cmd_lb, u_cmd_ub, u_rate_lb, u_rate_ub, x_lb, x_ub
 
 
+# In[ OSQP setup functions mk2 ]
+
+def gen_state_constr(x, lb, ub, hzn, MM):
+    
+    # only generate the limits as the matrix multiplying the sequence of inputs
+    # is already known to be CC.
+    
+    nstates = len(x)
+        
+    lb = np.tile(lb,(hzn+1,1))    
+    ub = np.tile(ub,(hzn+1,1))
+    
+    state_constr_lower = lb - MM @ x
+    state_constr_upper = ub - MM @ x
+    
+    return state_constr_lower, state_constr_upper
+
+def gen_cmd_constr(hzn, lb, ub):
+    
+    # returns stacked lower, upper bounds, identity for multiplying sequence of inputs
+    
+    return np.tile(lb,(hzn+1,1)), np.tile(ub,(hzn+1,1)), np.eye(len(ub)*hzn)
+
+def gen_cmd_rate_constr(u_len, hzn, lb, ub):
+    
+    lb = np.concatenate((np.ones([u_len,1])*-np.infty,np.tile(lb,(hzn,1))))
+    ub = np.concatenate((np.ones([u_len,1])*np.infty,np.tile(ub,(hzn,1))))
+    
+    rate_lim_constr_mat = np.eye(u_len*hzn)
+    
+    for i in range(u_len*hzn):
+        if i >= u_len:
+            rate_lim_constr_mat[i,i-u_len] = -1
+            
+    return lb, ub, rate_lim_constr_mat
+
+def gen_OSQP_A(CC, cscm, rlcm):
+    
+    return np.concatenate((CC, cscm, rlcm), axis=0)
+
+# In[]
+
+def setup_OSQP(x, x_lb, x_ub, hzn, MM, CC, u_lb, u_ub, udot_lb, udot_ub, u_len):
+    
+    """
+    There are three constraints to be enforced on the system:
+        
+        state constraints:
+            x(n+1) = Ax(n) + Bu(n)
+            
+        input command limit constraints:
+            u_min <= u <= u_max
+            
+        input command rate limit constraints:
+            udot_min <= udot <= udot_max
+            
+    args:
+        x:
+            2D numpy array -> vertical vector
+        x_lb:
+            2D numpy array -> vertical vector
+        x_ub:
+            2D numpy array -> vertical vector
+        hzn:
+            int
+        MM:
+            2D numpy array
+        CC:
+            2D numpy array
+        u_lb:
+            2D numpy array -> vertical vector
+        u_ub:
+            2D numpy array -> vertical vector
+        udot_lb:
+            2D numpy array -> vertical vector
+        udot_ub:
+            2D numpy array -> vertical vector
+        u_len:
+            int
+        
+            
+    """
+    
+    nstates = len(x)
+    
+    # calculate state constraint limits vector
+        
+    x_lb = np.tile(x_lb,(hzn+1,1))    
+    x_ub = np.tile(x_ub,(hzn+1,1))
+    
+    state_constr_lower = x_lb - MM @ x
+    state_constr_upper = x_ub - MM @ x
+    
+    # the state constraint input sequence matrix is just CC
+    
+    # calculate the command saturation limits vector
+    
+    cmd_constr_lower = np.tile(u_lb,(hzn+1,1))
+    cmd_constr_upper = np.tile(u_ub,(hzn+1,1))
+    
+    # calculate the command saturation input sequence matrix -> just eye
+    
+    cmd_constr_mat = np.eye(u_len*hzn)
+    
+    # calculate the command rate saturation limits vector
+    
+    cmd_rate_constr_lower = np.concatenate((np.ones([u_len,1])*-np.infty,np.tile(udot_lb,(hzn,1))))
+    cmd_rate_constr_upper = np.concatenate((np.ones([u_len,1])*np.infty,np.tile(udot_ub,(hzn,1))))
+    
+    # calculate the command rate saturation input sequence matrix
+    
+    cmd_rate_constr_mat = np.eye(u_len*hzn)
+    for i in range(u_len*hzn):
+        if i >= u_len:
+            cmd_rate_constr_mat[i,i-u_len] = -1
+            
+    OSQP_A = np.concatenate((CC, cmd_constr_mat, cmd_rate_constr_mat), axis=0)
+            
+    OSQP_l = np.concatenate((state_constr_lower, cmd_constr_lower, cmd_rate_constr_lower))
+    
+    OSQP_u = np.concatenate((state_constr_upper, cmd_constr_upper, cmd_rate_constr_upper))
+    
+    return OSQP_A, OSQP_l, OSQP_u
+
+    
+
+# In[ Calculate the MM, CC matrices -> squiggly M and squiggly C in the notes ]
+
+def calc_MC(A, B, dt, hzn):
+    
+    # hzn is the horizon
+    nstates = A.shape[0]
+    ninputs = B.shape[1]
+    
+    # x0 is the initial state vector of shape (nstates, 1)
+    # u is the matrix of input vectors over the course of the prediction of shape (ninputs,horizon)
+    
+    # initialise CC, MM, Bz
+    CC = np.zeros([nstates*hzn, ninputs*hzn])
+    MM = np.zeros([nstates*hzn, nstates])
+    Bz = np.zeros([nstates, ninputs])
+        
+    for i in range(hzn):
+        MM[nstates*i:nstates*(i+1),:] = np.linalg.matrix_power(A,i+1) 
+        for j in range(hzn):
+            if i-j >= 0:
+                CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = np.matmul(np.linalg.matrix_power(A,(i-j)),B)
+            else:
+                CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = Bz
+                
+    CC = np.concatenate((np.zeros([nstates,ninputs*hzn]), CC), axis=0)
+    MM = np.concatenate((np.eye(nstates), MM), axis=0)
+
+    return MM, CC
+
 # In[ OSQP setup functions ]
 
 def gen_rate_lim_constr_mat(u_len, hzn):
@@ -100,30 +255,12 @@ def setup_OSQP_paras(CC, A, x, hzn, ninputs, x_ub, x_lb, u_cmd_ub, u_cmd_lb, u_r
     return OSQP_A, OSQP_l, OSQP_u
     
 
-# In[ Calculate the MM, CC matrices -> squiggly M and squiggly C in the notes ]
-def calc_MC(hzn, A, B, dt):
 
-    # hzn is the horizon
-    nstates = A.shape[0]
-    ninputs = B.shape[1]
-    
-    # x0 is the initial state vector of shape (nstates, 1)
-    # u is the matrix of input vectors over the course of the prediction of shape (ninputs,horizon)
-    
-    # initialise CC, MM, Bz
-    CC = np.zeros([nstates*hzn, ninputs*hzn])
-    MM = np.zeros([nstates*hzn, nstates])
-    Bz = np.zeros([nstates, ninputs])
-    
-    for i in range(hzn):
-        MM[nstates*i:nstates*(i+1),:] = np.linalg.matrix_power(A,i+1) * dt ** (i+1)
-        for j in range(hzn):
-            if i-j >= 0:
-                CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = np.matmul(np.linalg.matrix_power(A,(i-j)),B) * dt ** (i-j+1)
-            else:
-                CC[nstates*i:nstates*(i+1),ninputs*j:ninputs*(j+1)] = Bz
 
-    return MM, CC
+# In[]
+
+def is_pos_def(x):
+    return np.all(np.linalg.eigvals(x) > 0)
 
 # In[ discrete linear quadratic regulator ]
 # from https://github.com/python-control/python-control/issues/359:
@@ -259,6 +396,23 @@ def toc(tempBool=True):
 def tic():
     # Records a time in TicToc, marks the beginning of a time interval
     toc(False)
+    
+
+# In[]
+
+def bmatrix(a):
+    """Returns a LaTeX bmatrix
+
+    :a: numpy array
+    :returns: LaTeX bmatrix as a string
+    """
+    if len(a.shape) > 2:
+        raise ValueError('bmatrix can at most display two dimensions')
+    lines = str(a).replace('[', '').replace(']', '').splitlines()
+    rv = [r'\begin{bmatrix}']
+    rv += ['  ' + ' & '.join(l.split()) + r'\\' for l in lines]
+    rv +=  [r'\end{bmatrix}']
+    return '\n'.join(rv)
     
 # In[ visualise full 18 DoF system time history ]
 
