@@ -288,13 +288,17 @@ class F16(gym.Env):
         
         return A, B, C, D
     
-    def _calc_MPC_action_mk2(self):
+    def _calc_MPC_action_mk2(self, p_dem, q_dem, r_dem):
         
-        hzn = 3
+        hzn = 30
         dt = 0.001
         x = self.x._get_mpc_x()
         u = self.u._get_mpc_u()
-        act_states = self.x._get_mpc_act_states()        
+        act_states = self.x._get_mpc_act_states()
+        x_ref = np.copy(x)
+        x_dem = np.array([p_dem, q_dem, r_dem])
+        
+        x_ref[6:9] = x_dem
         
         A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
@@ -311,7 +315,7 @@ class F16(gym.Env):
         #     self.u._vec_mpc_udot_ub
         
         OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = setup_OSQP(
-            A, B, Q, R, hzn, dt, x, u,\
+            x_ref, A, B, Q, R, hzn, dt, x, act_states,\
             self.x._vec_mpc_x_lb,\
             self.x._vec_mpc_x_ub,\
             self.u._vec_mpc_u_lb,\

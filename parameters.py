@@ -138,6 +138,7 @@ udot_lb = [-10000, -60, -80, -120]
 observed_states = ['V','alpha','beta','p','q','r']
 mpc_states = ['h','phi','theta','V','alpha','beta','p','q','r','lf1','lf2']
 mpc_inputs = ['T','dh','da','dr']
+mpc_controlled_states = ['p','q','r']
 
 # In[dataclass wrap]
 
@@ -151,7 +152,8 @@ class stateVector:
     initial_condition: np.array
     observed_states: list
     mpc_states: list
-    mpc_inputs: list = None
+    mpc_inputs: list
+    mpc_controlled_states: list
     _obs_x_idx: list = None
     _mpc_x_idx: list = None
     _mpc_x_lb: list = None
@@ -161,6 +163,7 @@ class stateVector:
         self._obs_x_idx = [self.states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.states]
         self._mpc_x_idx = [self.states.index(self.mpc_states[i]) for i in range(len(self.mpc_states)) if self.mpc_states[i] in self.states]
         self._mpc_u_states_idx = [self.states.index(self.mpc_inputs[i]) for i in range(len(self.mpc_inputs)) if self.mpc_inputs[i] in self.states]
+        self._mpc_u_in_mpc_x_idx = [self.mpc_states.index(self.mpc_controlled_states[i]) for i in range(len(self.mpc_controlled_states)) if self.mpc_controlled_states[i] in self.mpc_states]
         self._mpc_x_lb = [self.lower_bound[i] for i in self._mpc_x_idx]
         self._mpc_x_ub = [self.upper_bound[i] for i in self._mpc_x_idx]
         self._mpc_obs_x_idx = [self.mpc_states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.mpc_states]
@@ -217,7 +220,8 @@ state_vector = stateVector(
     np.copy(x0),
     observed_states,
     mpc_states,
-    mpc_inputs)    
+    mpc_inputs,
+    mpc_controlled_states)    
 
 input_vector = inputVector(
     inputs,
