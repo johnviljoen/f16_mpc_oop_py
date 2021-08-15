@@ -12,54 +12,95 @@ from numpy import pi
 import scipy
 import ctypes
 
-from parameters import u_lb, u_ub, udot_lb, udot_ub, x_lb, x_ub
+from parameters import u_lb, u_ub, x_lb, x_ub
 
 
 # In[]
 
 def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub, udot_lb, udot_ub):
     
+    m = len(x)              # number of states
+    n = len(act_states)     # number of inputs
+    
     """
+    Function that builds a model predictive control problem from a discrete linear
+    state space system (A,B), its corresponding cost function weights (Q,R), and
+    its constraints. This is a tracking controller (x_ref) that aims for zero error
+    in p,q,r angular rates.
+    
+    The output is designed for the OSQP constrained quadratic solver (https://osqp.org/docs/)
+    
+    The function is designed to eventually be generalisable with the rest of the 
+    code, but this is not yet complete. This is the reason for some of the unusual
+    decisions at first glance, like some input vectors being horizontal 1D and others
+    vertical 2D.
+    
     args:
         xref:
-            2D numpy array -> vertical vector
-        x:
-            1D numpy array -> horizontal vector
-        x_lb:
-            2D numpy array -> vertical vector
-        x_ub:
-            2D numpy array -> vertical vector
+            2D numpy array -> vertical vector (m x 1)
+        A:
+            2D numpy array (m x m)
+        B:
+            2D numpy array (m x n)
+        Q:
+            2D numpy array (m x m)
+        R:
+            2D numpy array (n x n)
         hzn:
             int
-        MM:
-            2D numpy array
-        CC:
-            2D numpy array
+        dt:
+            float
+        x:
+            1D numpy array -> horizontal vector (0 x m)
+        act_states:
+            1D numpy array -> horizontal vector (0 x n)
+        x_lb:
+            2D numpy array -> vertical vector (m x 1)
+        x_ub:
+            2D numpy array -> vertical vector (m x 1)
         u_lb:
-            2D numpy array -> vertical vector
+            2D numpy array -> vertical vector (n x 1)
         u_ub:
-            2D numpy array -> vertical vector
+            2D numpy array -> vertical vector (n x 1)      
         udot_lb:
-            2D numpy array -> vertical vector
+            2D numpy array -> vertical vector (n x 1)
         udot_ub:
-            2D numpy array -> vertical vector
-        u_len:
-            int
+            2D numpy array -> vertical vector (n x 1)
+            
+    returns:
+        OSQP_P:
+            2D numpy array (n*hzn x n*hzn)
+        OSQP_q:
+            2D numpy array -> vertical vector (n*hzn x 1)
+        OSQP_A:
+            2D numpy array (m*hzn x n*hzn)
+        OSQP_l:
+            2D numpy array -> vertical vector (n*hzn x 1)
+        OSQP_u:
+            2D numpy array -> vertical vector (n*hzn x 1)
             
     """
     
-    # number of states, inputs = m, n
-    m = len(x)
-    n = len(act_states)
+    # calculate matrices for predictions (p16 https://markcannon.github.io/assets/downloads/teaching/C21_Model_Predictive_Control/mpc_notes.pdf)
     
     MM, CC = calc_MC(A, B, dt, hzn)
     
+    # calculate LQR gain matrix for mode 2 (https://github.com/python-control/python-control/issues/359)
+    
     K = - dlqr(A, B, Q, R)
+    
+    # calculate terminal weighting matrix (p24 https://markcannon.github.io/assets/downloads/teaching/C21_Model_Predictive_Control/mpc_notes.pdf)
+    
     Q_bar = scipy.linalg.solve_discrete_lyapunov((A + B @ K).T, Q + K.T @ R @ K)
+    
+    # construct full QQ, RR (p17 https://markcannon.github.io/assets/downloads/teaching/C21_Model_Predictive_Control/mpc_notes.pdf)
+    
     QQ = dmom(Q, hzn)
     QQ[-m:,-m:] = Q_bar
-    
     RR = dmom(R, hzn)
+    
+    # construct objective function (2.3) (p17 https://markcannon.github.io/assets/downloads/teaching/C21_Model_Predictive_Control/mpc_notes.pdf)
+    # and implement this in OSQP format
     
     H = CC.T @ QQ @ CC + RR
     F = CC.T @ QQ @ MM

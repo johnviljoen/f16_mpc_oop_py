@@ -30,12 +30,6 @@ fi_flag = 1
 # stability_flag = 0 -> stable xcg 25% model
 stab_flag = 0
 
-# In[MPC parameters]
-
-hzn = 4
-
-pred_dt = 0.001
-
 # In[initial_conditions]  
 
 ''' states in m/s, rad, rad/s '''
@@ -103,7 +97,7 @@ lef_max         = 25            # (deg)
 # In[wrap for input]  
 
 # initial_state_vector = np.array([npos, epos, h, phi, theta, psi, vt, alpha, beta, p, q, r, T, dh, da, dr, lef, fi_flag])
-model_predictive_control_parameters = [hzn, pred_dt]
+# model_predictive_control_parameters = [hzn, pred_dt]
 
 m2f = 3.28084 # metres to feet conversion
 f2m = 1/m2f # feet to metres conversion

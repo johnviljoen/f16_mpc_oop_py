@@ -288,7 +288,7 @@ class F16(gym.Env):
         
         return A, B, C, D
     
-    def _calc_MPC_action_mk2(self, p_dem, q_dem, r_dem):
+    def _calc_MPC_action(self, p_dem, q_dem, r_dem):
         
         hzn = 30
         dt = 0.001
@@ -303,16 +303,8 @@ class F16(gym.Env):
         A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
         
-        Q = C.T @ C
-        R = np.eye(len(u)) * 0.01 # incredibly sensitive
-        
-        # return A, B, Q, R, hzn, dt, x, act_states,\
-        #     self.x._vec_mpc_x_lb,\
-        #     self.x._vec_mpc_x_ub,\
-        #     self.u._vec_mpc_u_lb,\
-        #     self.u._vec_mpc_u_ub,\
-        #     self.u._vec_mpc_udot_lb,\
-        #     self.u._vec_mpc_udot_ub
+        Q = C.T @ C # penalise states
+        R = np.eye(len(u)) * 0.01 # penalise inputs
         
         OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = setup_OSQP(
             x_ref, A, B, Q, R, hzn, dt, x, act_states,\
@@ -325,42 +317,4 @@ class F16(gym.Env):
         
         return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
 
-    def _calc_MPC_action(self, paras_mpc):
-        
-        hzn = paras_mpc[0]
-        dt = 1
-        x = self.x._get_mpc_x()
-        u = self.u._get_mpc_u()
-                
-        A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
-        # C[0,3] = 1
-        # return A,B,C,D
-        A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
-        
-        MM, CC = calc_MC(hzn, A, B, dt)
-        
-        Q = C.T @ C
-        R = np.eye(len(u)) * 0.01 # incredibly sensitive
-                
-        K = - dlqr(A, B, Q, R)
-        Q_bar = scipy.linalg.solve_discrete_lyapunov((A + B @ K).T, Q + K.T @ R @ K)
-        QQ = dmom(Q, hzn)
-        # return QQ
-        RR = dmom(R, hzn)
-        QQ[-len(x):,-len(x):] = Q_bar
-                
-        H = CC.T @ QQ @ CC + RR
-        F = CC.T @ QQ @ MM
-        G = MM.T @ QQ @ MM
-        
-        P = 2*H
-        q = (2 * x[np.newaxis] @ F.T).T
-        
-        OSQP_A, OSQP_l, OSQP_u = setup_OSQP_paras(CC, A, x[np.newaxis].T, hzn, len(u), self.x._mpc_x_ub, self.x._mpc_x_lb, self.u._mpc_u_cmd_ub, self.u._mpc_u_cmd_lb, self.u._mpc_u_rate_lb, self.u._mpc_u_rate_lb)
-        
-        m = osqp.OSQP()
-        m.setup(P=csc_matrix(P), q=q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=True)
-        res = m.solve()
-        
-        return res.x[0:len(u)], P, q, OSQP_A, OSQP_l, OSQP_u
     

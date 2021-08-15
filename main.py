@@ -29,7 +29,7 @@ f16 = F16(state_vector, input_vector, simulation_parameters, nlplant)
 # A,B,C,D = f16.linearise(f16.x, f16.u)
 # A,B,C,D = cont2discrete((A,B,C,D),)
 # x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub, udot_lb, udot_ub = f16._calc_MPC_action_mk2()
-OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = f16._calc_MPC_action_mk2(2,0,0)
+OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = f16._calc_MPC_action(2,0,0)
 
 m = osqp.OSQP()
 m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=True)
