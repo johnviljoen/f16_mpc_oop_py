@@ -111,16 +111,15 @@ class F16(gym.Env):
         Args:
             x:
                 {h,phi,theta,V,alpha,beta,p,q,r,lf1,lf2}
-                numpy 2D array (vertical vector) of 14 elements
-                {xe,ye,h,phi,theta,psi,V,alpha,beta,p,q,r,lf1,lf2}
+
             u:
                 numpy 2D array (vertical vector) of 4 elements
                 {T,dh,da,dr}
     
         Returns:
             xdot:
-                numpy 2D array (vertical vector) of 14 elements
-                time derivatives of {xe,ye,h,phi,theta,psi,V,alpha,beta,p,q,r,lf1,lf2}
+                numpy 2D array (vertical vector) of 11 elements
+                time derivatives of {h,phi,theta,V,alpha,beta,p,q,r,lf1,lf2}
         """
         state_vector = np.zeros(18)
         
@@ -295,9 +294,9 @@ class F16(gym.Env):
         x = self.x._get_mpc_x()
         u = self.u._get_mpc_u()
         act_states = self.x._get_mpc_act_states()
+        
         x_ref = np.copy(x)
         x_dem = np.array([p_dem, q_dem, r_dem])
-        
         x_ref[6:9] = x_dem
         
         A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
