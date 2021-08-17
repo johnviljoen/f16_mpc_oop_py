@@ -80,6 +80,21 @@ class F16(gym.Env):
         return xdot
     
     def step(self, action):
+        
+        # check the current state isnt outside of C lookup table bounds
+        
+        bounds_check = ((self.x.values[:,None] > self.x._vec_x_ub) & (self.x.values[:,None] < self.x._vec_x_lb)).any(1)
+        
+        # if any bounds check return the F16 has left envelope, break and raise exception
+        
+        return bounds_check
+        # https://stackoverflow.com/questions/52069575/check-if-numpy-array-falls-within-bounds
+        if bounds_check.any():
+            
+            print('A state has left the flight envelope designated by the lookup tables')
+            
+            exit()
+        
         self.x.values += self._calc_xdot(self.x.values, self.u.values)*self.paras.dt
         reward = 1
         isdone = False

@@ -165,6 +165,8 @@ class stateVector:
         # this is dirty and I hate it, but I can't think of a general way to implement right now
         self._mpc_obs_x_idx = sorted([self.mpc_states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.mpc_states])
                 
+        self._vec_x_lb = np.array(self.lower_bound)[:,None]
+        self._vec_x_ub = np.array(self.upper_bound)[:,None]
         self._vec_mpc_x_lb = np.array(self._mpc_x_lb)[np.newaxis].T
         self._vec_mpc_x_ub = np.array(self._mpc_x_ub)[np.newaxis].T
         
