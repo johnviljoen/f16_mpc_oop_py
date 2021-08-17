@@ -126,44 +126,40 @@ class F16(gym.Env):
                 {h,phi,theta,V,alpha,beta,p,q,r,lf1,lf2}
 
             u:
-                numpy 2D array (vertical vector) of 4 elements
-                {T,dh,da,dr}
+                numpy 2D array (vertical vector) of 3 elements
+                {dh,da,dr}
     
         Returns:
             xdot:
-                numpy 2D array (vertical vector) of 11 elements
-                time derivatives of {h,phi,theta,V,alpha,beta,p,q,r,lf1,lf2}
+                numpy 2D array (vertical vector) of 10 elements
+                time derivatives of {h,phi,theta,alpha,beta,p,q,r,lf1,lf2}
         """
         state_vector = np.copy(self.x.values)
         # np.zeros(18)
         
         input_vector = np.copy(self.u.values)
-        
-        u = np.copy(self.u.initial_condition)
-        
+                
         for i in range(len(self.x._mpc_x_idx)):
             state_vector[self.x._mpc_x_idx[i]] = x[i]
             
         for i in range(len(self.u._mpc_u_idx)):
             state_vector[self.x._mpc_u_in_x_idx[i]] = u[i]
             input_vector[self.u._mpc_u_idx[i]] = u[i]
-            
-        return state_vector                       
-         
+        
         # initialise variables
         xdot = np.zeros(18)
         coeff = np.zeros(3)
         C_input_x = np.zeros(18)
         #--------leading edge flap model---------#
-        lf_state1_dot, lf_state2_dot = upd_lef(state_vector[2], state_vector[6], coeff, state_vector[7], state_vector[12], state_vector[13], self.nlplant)
+        lf_state1_dot, lf_state2_dot = upd_lef(state_vector[2], state_vector[6], coeff, state_vector[7], state_vector[17], state_vector[16], self.nlplant)
         #----------run nlplant for xdot----------#
         # C_input_x = np.concatenate((x[0:12],u,x[13:14]))
         self.nlplant.Nlplant(ctypes.c_void_p(state_vector.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(self.paras.fi_flag))    
         #----------assign actuator xdots---------#
         state_vector_dot = np.concatenate((xdot[0:12],np.zeros(4),np.array([lf_state1_dot, lf_state2_dot])))
-        
-        return state_vector_dot
-        
+                
+        # return the xdot in the form of the original input vector it was input to
+        # this function in.
         return np.array([state_vector_dot[i] for i in self.x._mpc_x_idx])
     
     def _get_obs_na(self, x, u):
