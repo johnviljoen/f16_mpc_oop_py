@@ -19,6 +19,7 @@ from scipy.signal import cont2discrete
 import scipy
 import osqp
 from scipy.sparse import csc_matrix
+from sys import exit
 
 # custom files
 from utils import *
@@ -83,19 +84,16 @@ class F16(gym.Env):
         
         # check the current state isnt outside of C lookup table bounds
         
-        bounds_check = ((self.x.values[:,None] > self.x._vec_x_ub) & (self.x.values[:,None] < self.x._vec_x_lb)).any(1)
+        bounds_check = [self.x.values[i] < self.x.lower_bound[i] or self.x.values[i] > self.x.upper_bound[i] for i in range(len(self.x.values))]
         
         # if any bounds check return the F16 has left envelope, break and raise exception
-        
-        return bounds_check
-        # https://stackoverflow.com/questions/52069575/check-if-numpy-array-falls-within-bounds
-        if bounds_check.any():
+        # https://stackoverflow.com/questions/52069575/check-if-numpy-array-falls-within-bounds - a better way to do this
+        if any(bounds_check):
             
             print('A state has left the flight envelope designated by the lookup tables')
-            
             exit()
         
-        self.x.values += self._calc_xdot(self.x.values, self.u.values)*self.paras.dt
+        self.x.values += self._calc_xdot(self.x.values, action)*self.paras.dt
         reward = 1
         isdone = False
         info = {'fidelity':'high'}
@@ -136,13 +134,22 @@ class F16(gym.Env):
                 numpy 2D array (vertical vector) of 11 elements
                 time derivatives of {h,phi,theta,V,alpha,beta,p,q,r,lf1,lf2}
         """
-        state_vector = np.zeros(18)
+        state_vector = np.copy(self.x.values)
+        # np.zeros(18)
+        
+        input_vector = np.copy(self.u.values)
+        
+        u = np.copy(self.u.initial_condition)
         
         for i in range(len(self.x._mpc_x_idx)):
             state_vector[self.x._mpc_x_idx[i]] = x[i]
             
-        state_vector[12:16] = u
-                                
+        for i in range(len(self.u._mpc_u_idx)):
+            state_vector[self.x._mpc_u_in_x_idx[i]] = u[i]
+            input_vector[self.u._mpc_u_idx[i]] = u[i]
+            
+        return state_vector                       
+         
         # initialise variables
         xdot = np.zeros(18)
         coeff = np.zeros(3)
@@ -153,8 +160,11 @@ class F16(gym.Env):
         # C_input_x = np.concatenate((x[0:12],u,x[13:14]))
         self.nlplant.Nlplant(ctypes.c_void_p(state_vector.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(self.paras.fi_flag))    
         #----------assign actuator xdots---------#
-        state_vector_dot = np.concatenate((xdot[0:12],u,np.array([lf_state1_dot, lf_state2_dot])))
-        return np.array([xdot[i] for i in self.x._mpc_x_idx])
+        state_vector_dot = np.concatenate((xdot[0:12],np.zeros(4),np.array([lf_state1_dot, lf_state2_dot])))
+        
+        return state_vector_dot
+        
+        return np.array([state_vector_dot[i] for i in self.x._mpc_x_idx])
     
     def _get_obs_na(self, x, u):
         return np.array([x[i] for i in self.x._mpc_obs_x_idx])
@@ -306,9 +316,8 @@ class F16(gym.Env):
     # control.linearize
     # control.iosys.linearize(sys, xeq, kw)
     
-    def _calc_MPC_action(self, p_dem, q_dem, r_dem):
+    def _calc_MPC_action(self, p_dem, q_dem, r_dem, hzn):
         
-        hzn = 30
         dt = 0.001
         x = self.x._get_mpc_x()
         u = self.u._get_mpc_u()
@@ -338,9 +347,22 @@ class F16(gym.Env):
         # return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
             
         m = osqp.OSQP()
-        m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False)
+        m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=True)
         res = m.solve()
         
         return res.x[0:len(u)]
+    
+    def calc_constr_checking_hzn(self):
+        
+        max_hzn = 50
+        
+        u = np.zeros([4,max_hzn])
+        
+        for i in range(max_hzn):
+            
+            u[:,i] = self._calc_MPC_action(0, 0, 0, i+1)
+            
+        return u
+        
 
     

@@ -22,7 +22,8 @@ from env import F16
 from parameters import state_vector, input_vector, simulation_parameters, nlplant
 
 f16 = F16(state_vector, input_vector, simulation_parameters, nlplant)
-res = f16._calc_MPC_action(2,0,0)
+
+# res = f16._calc_MPC_action(2,0,0,10)
 
 
 

@@ -77,7 +77,7 @@ lef_min         = 0.            # (deg)
 
 npos_max        = np.inf        # (m)
 epos_max        = np.inf        # (m)
-h_max           = 10000         # (m)
+h_max           = 100000         # (m)
 phi_max         = np.inf        # (deg)
 theta_max       = np.inf        # (deg)
 psi_max         = np.inf        # (deg)
@@ -101,10 +101,9 @@ lef_max         = 25            # (deg)
 
 m2f = 3.28084 # metres to feet conversion
 f2m = 1/m2f # feet to metres conversion
+
 x0 = np.array([npos*m2f, epos*m2f, h*m2f, phi, theta, psi, vt*m2f, alpha, beta, p, q, r, T, dh, da, dr, lef, -alpha*180/pi])#[np.newaxis].T
 u0 = np.copy(x0[12:16])
-
-
 
 if stab_flag == 1:
     so_file = os.getcwd() + "/C/nlplant_xcg35.so"
@@ -129,10 +128,10 @@ udot_lb = [-10000, -60, -80, -120]
 
 # In[mpc control choices] -> must be in order!
 
-observed_states = ['V','alpha','beta','p','q','r']
-observed_states = ['npos','epos','h','phi','theta','psi','V','alpha','beta','p','q','r','T','dh','da','dr','lf2','lf1']
-mpc_states = ['h','phi','theta','V','alpha','beta','p','q','r','lf1','lf2']
-mpc_inputs = ['T','dh','da','dr']
+# observed_states = ['V','alpha','beta','p','q','r']
+observed_states = ['h','phi','theta','alpha','beta','p','q','r','lf2','lf1']
+mpc_states = ['h','phi','theta','alpha','beta','p','q','r','lf1','lf2']
+mpc_inputs = ['dh','da','dr']
 mpc_controlled_states = ['p','q','r']
 
 # In[dataclass wrap]
@@ -155,20 +154,25 @@ class stateVector:
     _mpc_x_ub: list = None
     
     def __post_init__(self):
+        
         self._obs_x_idx = [self.states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.states]
         self._mpc_x_idx = [self.states.index(self.mpc_states[i]) for i in range(len(self.mpc_states)) if self.mpc_states[i] in self.states]
-        self._mpc_u_states_idx = [self.states.index(self.mpc_inputs[i]) for i in range(len(self.mpc_inputs)) if self.mpc_inputs[i] in self.states]
+        
+        self._mpc_u_states_idx = [self.states.index(self.mpc_inputs[i]) for i in range(len(self.mpc_inputs)) if self.mpc_inputs[i] in self.states]        
         self._mpc_u_in_mpc_x_idx = [self.mpc_states.index(self.mpc_controlled_states[i]) for i in range(len(self.mpc_controlled_states)) if self.mpc_controlled_states[i] in self.mpc_states]
+        self._mpc_u_in_x_idx = [self.states.index(self.mpc_inputs[i]) for i in range(len(self.mpc_inputs)) if self.mpc_inputs[i] in self.states]
+        
+        
         self._mpc_x_lb = [self.lower_bound[i] for i in self._mpc_x_idx]
         self._mpc_x_ub = [self.upper_bound[i] for i in self._mpc_x_idx]
         
-        # this is dirty and I hate it, but I can't think of a general way to implement right now
-        self._mpc_obs_x_idx = sorted([self.mpc_states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.mpc_states])
+        self._mpc_obs_x_idx = [i for i in range(len(self.mpc_states)) if self.mpc_states[i] in self.observed_states]
                 
-        self._vec_x_lb = np.array(self.lower_bound)[:,None]
-        self._vec_x_ub = np.array(self.upper_bound)[:,None]
-        self._vec_mpc_x_lb = np.array(self._mpc_x_lb)[np.newaxis].T
-        self._vec_mpc_x_ub = np.array(self._mpc_x_ub)[np.newaxis].T
+        self._np_x_lb = np.array(self.lower_bound)
+        self._np_x_ub = np.array(self.upper_bound)
+        
+        self._vec_mpc_x_lb = np.array(self._mpc_x_lb)[:,None]
+        self._vec_mpc_x_ub = np.array(self._mpc_x_ub)[:,None]
         
     def _get_mpc_x(self):
         return np.array([self.values[i] for i in self._mpc_x_idx])

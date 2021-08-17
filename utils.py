@@ -145,8 +145,8 @@ def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub
     
     # calculate the command rate saturation limits vector
     
-    u0_rate_constr_lower = act_states[:,None] + udot_lb
-    u0_rate_constr_upper = act_states[:,None] + udot_ub
+    u0_rate_constr_lower = act_states[:,None] + udot_lb * dt
+    u0_rate_constr_upper = act_states[:,None] + udot_ub * dt
     
     cmd_rate_constr_lower = np.concatenate((u0_rate_constr_lower,np.tile(udot_lb,(hzn-1,1))))
     cmd_rate_constr_upper = np.concatenate((u0_rate_constr_upper,np.tile(udot_ub,(hzn-1,1))))
@@ -368,7 +368,23 @@ def bmatrix(a):
     
 # In[ visualise full 18 DoF system time history ]
 
-def vis(x_storage, rng):
+def vis_u(u_storage, rng):
+    
+    fig, axs = plt.subplots(4,1)
+    
+    axs[0].plot(rng, u_storage[:,0])
+    axs[0].set_ylabel('T_cmd')
+    
+    axs[1].plot(rng, u_storage[:,1])
+    axs[1].set_ylabel('dh_cmd')
+    
+    axs[2].plot(rng, u_storage[:,2])
+    axs[2].set_ylabel('da_cmd')
+    
+    axs[3].plot(rng, u_storage[:,3])
+    axs[3].set_ylabel('dr_cmd')
+    
+def vis_x(x_storage, rng):
 
     fig, axs = plt.subplots(12, 1)
     #fig.suptitle('Vertically stacked subplots')

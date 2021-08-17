@@ -12,7 +12,7 @@ import numpy as np
 
 from env import F16
 from parameters import state_vector, input_vector, simulation_parameters, nlplant
-from utils import vis
+from utils import vis_x, vis_u
 
 
 # from control.matlab import *
@@ -159,26 +159,34 @@ class test_F16(unittest.TestCase, F16):
         
         # create storage
         x_storage = np.zeros([len(rng),len(self.x.values)])
+        u_storage = np.zeros([len(rng),len(self.u.values)])
         xdot_storage = np.zeros([len(rng),len(self.x.values)])
         
         for idx, val in enumerate(rng):
             
-            p_dem = 2
+            p_dem = 0
             q_dem = 0
             r_dem = 0
             
-            self.u.values = self._calc_MPC_action(p_dem, q_dem, r_dem)
-            
             print('idx:', idx)
+            
+            cmd = self._calc_MPC_action(p_dem, q_dem, r_dem,10)
+            u_storage[idx,:] = cmd
+            self.u.values = cmd
+            self.u.values[0] = self.u.initial_condition[0]
             print('u:',self.u.values)
-            print('x:',self.x.values)
+            # self.u.values = np.copy(self.u.initial_condition)
+            
+            # print('u:',self.u.values)
+            # print('x:',self.x.values)
             
             self.step(self.u.values)
             
             x_storage[idx,:] = self.x.values
             #bar.update(idx)
             
-        vis(x_storage, rng)
+        vis_x(x_storage, rng)
+        vis_u(u_storage, rng)
             
     
                     
