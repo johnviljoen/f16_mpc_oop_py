@@ -127,9 +127,10 @@ u_lb = [T_min, dh_min, da_min, dr_min]
 udot_ub = [10000, 60, 80, 120]
 udot_lb = [-10000, -60, -80, -120]
 
-# In[mpc control choices]
+# In[mpc control choices] -> must be in order!
 
 observed_states = ['V','alpha','beta','p','q','r']
+observed_states = ['npos','epos','h','phi','theta','psi','V','alpha','beta','p','q','r','T','dh','da','dr','lf2','lf1']
 mpc_states = ['h','phi','theta','V','alpha','beta','p','q','r','lf1','lf2']
 mpc_inputs = ['T','dh','da','dr']
 mpc_controlled_states = ['p','q','r']
@@ -160,7 +161,10 @@ class stateVector:
         self._mpc_u_in_mpc_x_idx = [self.mpc_states.index(self.mpc_controlled_states[i]) for i in range(len(self.mpc_controlled_states)) if self.mpc_controlled_states[i] in self.mpc_states]
         self._mpc_x_lb = [self.lower_bound[i] for i in self._mpc_x_idx]
         self._mpc_x_ub = [self.upper_bound[i] for i in self._mpc_x_idx]
-        self._mpc_obs_x_idx = [self.mpc_states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.mpc_states]
+        
+        # this is dirty and I hate it, but I can't think of a general way to implement right now
+        self._mpc_obs_x_idx = sorted([self.mpc_states.index(self.observed_states[i]) for i in range(len(self.observed_states)) if self.observed_states[i] in self.mpc_states])
+                
         self._vec_mpc_x_lb = np.array(self._mpc_x_lb)[np.newaxis].T
         self._vec_mpc_x_ub = np.array(self._mpc_x_ub)[np.newaxis].T
         

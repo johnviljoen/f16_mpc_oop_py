@@ -28,8 +28,6 @@ The F16 class is contained in 'env.py', this contains the functions:
 - _calc_xdot_na
 - _get_obs_na
  
-	
- 	
 This forms the heart of the simulation.
 
 calc_MPC_action uses a number of functions currently found in 'utils.py', for matrix operations and reordering for input into the OSQP optimizer. The integrator used is a simple euler fixed time step.

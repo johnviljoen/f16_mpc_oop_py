@@ -104,7 +104,7 @@ class F16(gym.Env):
             of form numpy 1D array to match gym requirements
         """
         
-        return np.copy(np.array(list(x[i] for i in self.x._obs_x_idx), dtype='float32').flatten())
+        return np.array([x[i] for i in self.x._obs_x_idx])
     
     def _calc_xdot_na(self, x, u):
         """
@@ -142,7 +142,7 @@ class F16(gym.Env):
         return np.array([xdot[i] for i in self.x._mpc_x_idx])
     
     def _get_obs_na(self, x, u):
-        return np.copy(np.array(list(x[i] for i in self.x._mpc_obs_x_idx), dtype='float32').flatten())
+        return np.array([x[i] for i in self.x._mpc_obs_x_idx])
     
     def trim(self, h_t, v_t):
         
@@ -264,8 +264,8 @@ class F16(gym.Env):
         
         A = np.zeros([len(x),len(x)])
         B = np.zeros([len(x),len(u)])
-        C = np.zeros([len(self.x.observed_states),len(x)])
-        D = np.zeros([len(self.x.observed_states),len(u)])
+        C = np.zeros([len(self.x._mpc_obs_x_idx),len(x)])
+        D = np.zeros([len(self.x._mpc_obs_x_idx),len(u)])
         
         # Perturb each of the state variables and compute linearization
         for i in range(len(x)):
@@ -287,6 +287,10 @@ class F16(gym.Env):
         
         return A, B, C, D
     
+    # import control
+    # control.linearize
+    # control.iosys.linearize(sys, xeq, kw)
+    
     def _calc_MPC_action(self, p_dem, q_dem, r_dem):
         
         hzn = 30
@@ -298,11 +302,13 @@ class F16(gym.Env):
         x_ref = np.copy(x)
         x_dem = np.array([p_dem, q_dem, r_dem])
         x_ref[6:9] = x_dem
-        
+                
         A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
-        
+                
         Q = C.T @ C # penalise states
+        Q[4,4] = 0
+        Q[5,5] = 0
         R = np.eye(len(u)) * 0.01 # penalise inputs
         
         OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = setup_OSQP(
@@ -313,7 +319,13 @@ class F16(gym.Env):
             self.u._vec_mpc_u_ub,\
             self.u._vec_mpc_udot_lb,\
             self.u._vec_mpc_udot_ub)
+            
+        # return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
+            
+        m = osqp.OSQP()
+        m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False)
+        res = m.solve()
         
-        return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
+        return res.x[0:len(u)]
 
     

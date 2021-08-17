@@ -13,14 +13,12 @@ import scipy
 import ctypes
 
 from parameters import u_lb, u_ub, x_lb, x_ub
+from control.matlab import *
 
 
 # In[]
 
 def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub, udot_lb, udot_ub):
-    
-    m = len(x)              # number of states
-    n = len(act_states)     # number of inputs
     
     """
     Function that builds a model predictive control problem from a discrete linear
@@ -37,7 +35,7 @@ def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub
     
     args:
         xref:
-            2D numpy array -> vertical vector (m x 1)
+            1D numpy array -> horizontal vector (0 x m*hzn)
         A:
             2D numpy array (m x m)
         B:
@@ -81,6 +79,14 @@ def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub
             
     """
     
+    m = len(x)                      # number of states
+    n = len(act_states)             # number of inputs
+    
+    x = x[:,None]                   # convert x to vertical vector
+    
+    x_ref = np.tile(x_ref, hzn)     # stack x_refs to create sequence
+    x_ref = x_ref[:,None]     # convert stacked x_ref to vertical vector
+    
     # calculate matrices for predictions (p16 https://markcannon.github.io/assets/downloads/teaching/C21_Model_Predictive_Control/mpc_notes.pdf)
     
     MM, CC = calc_MC(A, B, dt, hzn)
@@ -102,12 +108,8 @@ def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub
     # construct objective function (2.3) (p17 https://markcannon.github.io/assets/downloads/teaching/C21_Model_Predictive_Control/mpc_notes.pdf)
     # and implement this in OSQP format
     
-    H = CC.T @ QQ @ CC + RR
-    F = CC.T @ QQ @ MM
-    G = MM.T @ QQ @ MM
-    
-    OSQP_P = 2*H
-    OSQP_q = (2 * (x_ref.T - x[np.newaxis]) @ F.T).T
+    OSQP_P = 2 * (CC.T @ QQ @ CC + RR)
+    OSQP_q = -2 * ((x_ref - MM @ x).T @ QQ @ CC).T
     
     """
     There are three constraints to be enforced on the system:
@@ -127,8 +129,8 @@ def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub
     x_lb = np.tile(x_lb,(hzn,1))    
     x_ub = np.tile(x_ub,(hzn,1))
     
-    state_constr_lower = x_lb - MM @ x[np.newaxis].T
-    state_constr_upper = x_ub - MM @ x[np.newaxis].T
+    state_constr_lower = x_lb - MM @ x
+    state_constr_upper = x_ub - MM @ x
     
     # the state constraint input sequence matrix is just CC
     
@@ -143,8 +145,8 @@ def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub
     
     # calculate the command rate saturation limits vector
     
-    u0_rate_constr_lower = act_states[np.newaxis].T + udot_lb
-    u0_rate_constr_upper = act_states[np.newaxis].T + udot_ub
+    u0_rate_constr_lower = act_states[:,None] + udot_lb
+    u0_rate_constr_upper = act_states[:,None] + udot_ub
     
     cmd_rate_constr_lower = np.concatenate((u0_rate_constr_lower,np.tile(udot_lb,(hzn-1,1))))
     cmd_rate_constr_upper = np.concatenate((u0_rate_constr_upper,np.tile(udot_ub,(hzn-1,1))))
@@ -159,14 +161,10 @@ def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub
     # assemble the complete matrices to send to OSQP
             
     OSQP_A = np.concatenate((CC, cmd_constr_mat, cmd_rate_constr_mat), axis=0)
-            
     OSQP_l = np.concatenate((state_constr_lower, cmd_constr_lower, cmd_rate_constr_lower))
-    
     OSQP_u = np.concatenate((state_constr_upper, cmd_constr_upper, cmd_rate_constr_upper))
     
-    return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
-
-    
+    return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u    
 
 # In[ Calculate the MM, CC matrices -> squiggly M and squiggly C in the notes ]
 
@@ -203,6 +201,18 @@ def calc_MC(A, B, dt, hzn, includeFirstRow=False):
 
 def is_pos_def(x):
     return np.all(np.linalg.eigvals(x) > 0)
+
+def is_ctrb(A,B):
+    if np.linalg.matrix_rank(ctrb(A,B)) == A.shape[0]:
+        return True
+    elif np.linalg.matrix_rank(ctrb(A,B)) <= A.shape[0]:
+        return False
+    
+def is_obsv(A,C):
+    if np.linalg.matrix_rank(obsv(A,C)) == A.shape[0]:
+        return True
+    elif np.linalg.matrix_rank(obsv(A,C)) <= A.shape[0]:
+        return False
 
 # In[ discrete linear quadratic regulator ]
 # from https://github.com/python-control/python-control/issues/359:
