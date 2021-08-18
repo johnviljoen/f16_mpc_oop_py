@@ -370,19 +370,19 @@ def bmatrix(a):
 
 def vis_u(u_storage, rng):
     
-    fig, axs = plt.subplots(4,1)
+    fig, axs = plt.subplots(3,1)
+    
+    # axs[0].plot(rng, u_storage[:,0])
+    # axs[0].set_ylabel('T_cmd')
     
     axs[0].plot(rng, u_storage[:,0])
-    axs[0].set_ylabel('T_cmd')
+    axs[0].set_ylabel('dh_cmd')
     
     axs[1].plot(rng, u_storage[:,1])
-    axs[1].set_ylabel('dh_cmd')
+    axs[1].set_ylabel('da_cmd')
     
     axs[2].plot(rng, u_storage[:,2])
-    axs[2].set_ylabel('da_cmd')
-    
-    axs[3].plot(rng, u_storage[:,3])
-    axs[3].set_ylabel('dr_cmd')
+    axs[2].set_ylabel('dr_cmd')
     
 def vis_x(x_storage, rng):
 

@@ -159,21 +159,21 @@ class test_F16(unittest.TestCase, F16):
         
         # create storage
         x_storage = np.zeros([len(rng),len(self.x.values)])
-        u_storage = np.zeros([len(rng),len(self.u.values)])
+        u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
         xdot_storage = np.zeros([len(rng),len(self.x.values)])
         
         for idx, val in enumerate(rng):
             
-            p_dem = 0
-            q_dem = 0
-            r_dem = 0
+            p_dem = 0 # rad
+            q_dem = 0  # rad
+            r_dem = 2 * np.pi/180   # rad
             
             print('idx:', idx)
             
             cmd = self._calc_MPC_action(p_dem, q_dem, r_dem,10)
             u_storage[idx,:] = cmd
-            self.u.values = cmd
-            self.u.values[0] = self.u.initial_condition[0]
+            self.u.values[1:] = cmd
+            # self.u.values[0] = self.u.initial_condition[0]
             print('u:',self.u.values)
             # self.u.values = np.copy(self.u.initial_condition)
             

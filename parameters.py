@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 # In[simulation parameters]  
 
-dt, time_start, time_end = 0.001, 0., 3.
+dt, time_start, time_end = 0.001, 0., 10.
 
 # fi_flag = 1 -> high fidelity model (full Nguyen)
 # fi_flag = 1 -> low fidelity model (Stevens Lewis reduced)

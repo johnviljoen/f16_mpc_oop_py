@@ -321,14 +321,24 @@ class F16(gym.Env):
         
         x_ref = np.copy(x)
         x_dem = np.array([p_dem, q_dem, r_dem])
-        x_ref[6:9] = x_dem
+        x_ref[5:8] = x_dem
+        
+        # return x_ref
                 
         A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
                 
         Q = C.T @ C # penalise states
+        Q[0,0] = 0
+        Q[1,1] = 0
+        Q[2,2] = 0
+        Q[3,3] = 0
         Q[4,4] = 0
-        Q[5,5] = 0
+        Q[5,5] = 1 # p
+        Q[6,6] = 1 # q
+        Q[7,7] = 1 # r
+        Q[8,8] = 0
+        Q[9,9] = 0
         R = np.eye(len(u)) * 0.01 # penalise inputs
         
         OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = setup_OSQP(
@@ -343,7 +353,7 @@ class F16(gym.Env):
         # return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
             
         m = osqp.OSQP()
-        m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=True)
+        m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False)
         res = m.solve()
         
         return res.x[0:len(u)]
