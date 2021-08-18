@@ -165,8 +165,8 @@ class test_F16(unittest.TestCase, F16):
         for idx, val in enumerate(rng):
             
             p_dem = 0 # rad
-            q_dem = 0  # rad
-            r_dem = 2 * np.pi/180   # rad
+            q_dem = 3 * np.pi/180  # rad
+            r_dem = 0   # rad
             
             print('idx:', idx)
             

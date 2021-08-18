@@ -308,13 +308,9 @@ class F16(gym.Env):
         
         return A, B, C, D
     
-    # import control
-    # control.linearize
-    # control.iosys.linearize(sys, xeq, kw)
-    
     def _calc_MPC_action(self, p_dem, q_dem, r_dem, hzn):
         
-        dt = 0.001
+        dt = self.paras.dt 
         x = self.x._get_mpc_x()
         u = self.u._get_mpc_u()
         act_states = self.x._get_mpc_act_states()
@@ -329,6 +325,7 @@ class F16(gym.Env):
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
                 
         Q = C.T @ C # penalise states
+        # print('Q:',Q.shape)
         Q[0,0] = 0
         Q[1,1] = 0
         Q[2,2] = 0
@@ -360,9 +357,9 @@ class F16(gym.Env):
     
     def calc_constr_checking_hzn(self):
         
-        max_hzn = 50
+        max_hzn = 150
         
-        u = np.zeros([4,max_hzn])
+        u = np.zeros([3,max_hzn])
         
         for i in range(max_hzn):
             
