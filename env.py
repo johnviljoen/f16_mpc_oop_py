@@ -308,6 +308,25 @@ class F16(gym.Env):
         
         return A, B, C, D
     
+    def _calc_LQR_gain(self):
+        
+        dt = self.paras.dt 
+        x = self.x._get_mpc_x()
+        u = self.u._get_mpc_u()
+        
+        A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+        
+
+        
+        A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
+        
+        Q = C.T @ C
+        R = np.eye(len(u)) * 1 # penalise inputs
+        
+        K = - dlqr(A, B, Q, R)
+        
+        return K
+    
     def _calc_MPC_action(self, p_dem, q_dem, r_dem, hzn):
         
         dt = self.paras.dt 
@@ -317,27 +336,41 @@ class F16(gym.Env):
         
         x_ref = np.copy(x)
         x_dem = np.array([p_dem, q_dem, r_dem])
+        
         x_ref[5:8] = x_dem
+        # x_ref[1] = 0
+
         
         # return x_ref
                 
         A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+        
+        # print('A:',A)
+        # print('B:',B)
+        # print('C:',C)
+        # print('D:',D)
+        
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
                 
         Q = C.T @ C # penalise states
         # print('Q:',Q.shape)
-        Q[0,0] = 0
+        
+        # ['h', 'phi', 'theta', 'alpha', 'beta', 'p', 'q', 'r', 'lf1', 'lf2']
+        
+        Q[0,0] = 0.01
         Q[1,1] = 0
-        Q[2,2] = 0
-        Q[3,3] = 0
+        Q[2,2] = 0.01
+        Q[3,3] = 0.01
         Q[4,4] = 0
         Q[5,5] = 1 # p
         Q[6,6] = 1 # q
         Q[7,7] = 1 # r
         Q[8,8] = 0
         Q[9,9] = 0
-        R = np.eye(len(u)) * 0.01 # penalise inputs
+        # R = np.eye(len(u)) * 0.01 # penalise inputs
         
+        R = np.array([[0.001,0,0],[0,1,0],[0,0,0.01]])
+                
         OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = setup_OSQP(
             x_ref, A, B, Q, R, hzn, dt, x, act_states,\
             self.x._vec_mpc_x_lb,\
@@ -350,7 +383,7 @@ class F16(gym.Env):
         # return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
             
         m = osqp.OSQP()
-        m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False)
+        m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False, polish=False)
         res = m.solve()
         
         return res.x[0:len(u)]

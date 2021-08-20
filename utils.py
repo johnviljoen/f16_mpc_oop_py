@@ -98,6 +98,7 @@ def setup_OSQP(x_ref, A, B, Q, R, hzn, dt, x, act_states, x_lb, x_ub, u_lb, u_ub
     # calculate terminal weighting matrix (p24 https://markcannon.github.io/assets/downloads/teaching/C21_Model_Predictive_Control/mpc_notes.pdf)
     
     Q_bar = scipy.linalg.solve_discrete_lyapunov((A + B @ K).T, Q + K.T @ R @ K)
+    # Q_bar = Q
     
     # construct full QQ, RR (p17 https://markcannon.github.io/assets/downloads/teaching/C21_Model_Predictive_Control/mpc_notes.pdf)
     
@@ -239,9 +240,9 @@ def dlqr(A,B,Q,R):
     
     """
     # first, solve the ricatti equation
-    P = np.matrix(scipy.linalg.solve_discrete_are(A, B, Q, R))
+    P = np.array(scipy.linalg.solve_discrete_are(A, B, Q, R))
     # compute the LQR gain
-    K = np.matrix(scipy.linalg.inv(B.T @ P @ B+R) @ (B.T @ P @ A))
+    K = np.array(scipy.linalg.inv(B.T @ P @ B+R) @ (B.T @ P @ A))
     return K
 
 # In[ degenerate 2D square matrix ]
@@ -367,6 +368,54 @@ def bmatrix(a):
     return '\n'.join(rv)
     
 # In[ visualise full 18 DoF system time history ]
+
+def vis_mpc_u(u_storage, rng):
+    fig, axs = plt.subplots(3,1)
+    
+    # axs[0].plot(rng, u_storage[:,0])
+    # axs[0].set_ylabel('T_cmd')
+    
+    axs[0].plot(rng, u_storage[:,0])
+    axs[0].set_ylabel('dh_cmd')
+    
+    axs[1].plot(rng, u_storage[:,1])
+    axs[1].set_ylabel('da_cmd')
+    
+    axs[2].plot(rng, u_storage[:,2])
+    axs[2].set_ylabel('dr_cmd')
+    
+def vis_mpc_x(x_storage, rng):
+    
+    fig1, axs1 = plt.subplots(3, 1)
+    #fig.suptitle('Vertically stacked subplots')
+    axs1[0].plot(rng, x_storage[:,0])
+    axs1[0].set_ylabel('h (ft)')
+        
+    axs1[1].plot(rng, x_storage[:,1])
+    axs1[1].set_ylabel('$\phi$ (rad)')
+    
+    axs1[2].plot(rng, x_storage[:,2])
+    axs1[2].set_ylabel('$\theta$ (rad)')
+    
+    fig2, axs2 = plt.subplots(2,1)
+    
+    axs2[0].plot(rng, x_storage[:,3]*180/pi)
+    axs2[0].set_ylabel('alpha (deg)')
+    
+    axs2[1].plot(rng, x_storage[:,4]*180/pi)
+    axs2[1].set_ylabel('beta (deg)')
+    
+    fig3, axs3 = plt.subplots(3,1)
+    
+    axs3[0].plot(rng, x_storage[:,5]*180/pi)
+    axs3[0].set_ylabel('p (deg/s)')
+    
+    axs3[1].plot(rng, x_storage[:,6]*180/pi)
+    axs3[1].set_ylabel('q (deg/s)')
+    
+    axs3[2].plot(rng, x_storage[:,7]*180/pi)
+    axs3[2].set_ylabel('r (deg/s)')
+    axs3[2].set_xlabel('time (s)')
 
 def vis_u(u_storage, rng):
     

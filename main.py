@@ -25,9 +25,14 @@ f16 = F16(state_vector, input_vector, simulation_parameters, nlplant)
 
 # res = f16._calc_MPC_action(2,0,0,10)
 
+x_trim, _ = f16.trim(10000,700)
+
+f16.x.initial_condition = x_trim
+
+f16.
 
 
-
+# A,B,Q,R = f16._calc_MPC_action(0,0,0,10)
 
 
 exit()
