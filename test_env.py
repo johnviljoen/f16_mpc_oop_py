@@ -12,10 +12,10 @@ import numpy as np
 
 from env import F16
 from parameters import state_vector, input_vector, simulation_parameters, nlplant
-from utils import vis_x, vis_u, dlqr, vis_mpc_u, vis_mpc_x
+from utils import *
 from scipy.signal import cont2discrete
 import matplotlib.pyplot as plt
-
+from control.matlab import *
 
 # from control.matlab import *
 from parameters import x_lb, x_ub, u_lb, u_ub, udot_lb, udot_ub
@@ -220,21 +220,35 @@ class test_F16(unittest.TestCase, F16):
             plt.legend()
             plt.show()
             
-        return x_storage, u_storage, rng
+        return x_storage, u_storage, rng, K
         
         
-    def test_LQR(self):
+    def test_LQR_static_nl(self):
         
         self.x.initial_condition, _ = self.trim(10000,700)
         self.u.initial_condition = self.x.initial_condition[12:16]
         self.reset()
         
-        print('x:',self.x._get_mpc_x())
-        print('u:',self.u._get_mpc_u())
-        
         # now we have the simulation p r i m e d for timehistory from trim
         # if the LQR deviates from where it is right now theres a problem
         # assuming LQR is implemented as u = -K @ (xref - x)
+        
+        Ac,Bc,Cc,Dc = self.linearise(self.x._get_mpc_x(), self.u._get_mpc_u(), _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+        A,B,C,D = cont2discrete((Ac,Bc,Cc,Dc), self.paras.dt)[0:4]    
+        
+        x = self.x._get_mpc_x()[:,None]
+        u = self.u._get_mpc_u()[:,None]
+        
+        Q = np.eye(len(x))
+        R = np.eye(len(u))*100
+        
+        K = dlqr(A,B,Q,R)
+        K = lqr(Ac,Bc,Q,R)[0]
+        
+        # return Ac, Bc, K
+            
+        # reference x is trim, i.e. the current state, therefore it should stay there
+        x_ref = np.copy(x)
         
         rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
         # bar = progressbar.ProgressBar(maxval=len(rng)).start()
@@ -246,36 +260,36 @@ class test_F16(unittest.TestCase, F16):
         
         x_ref = np.copy(self.x._get_mpc_x())
         
-        p_dem = 0
-        q_dem = 0
-        r_dem = 0
+        # p_dem = 0
+        # q_dem = 0
+        # r_dem = 0
         
-        x_ref[5] = p_dem
-        x_ref[6] = q_dem
-        x_ref[7] = r_dem
+        # x_ref[5] = p_dem
+        # x_ref[6] = q_dem
+        # x_ref[7] = r_dem
         
-        K = self._calc_LQR_gain()
-        print('K:',K)
-        print('x:',self.x._get_mpc_x())
-        
-        # return K, self.x._get_mpc_x(), x_ref
-        
-        # exit()
-        
+        # return A,B,K
+
         for idx, val in enumerate(rng):
             
-            # print('idx:', idx)
+            print('idx:', idx)
             
             
-            cmd = (- K @ (self.x._get_mpc_x() - x_ref)) * np.pi/180
-            u_storage[idx,:] = cmd
-            self.u.values[1:] = cmd
-            # self.u.values[0] = self.u.initial_condition[0]
-            # print('u:',self.u.values)
-            # self.u.values = np.copy(self.u.initial_condition)
+            u = (- K @ (self.x._get_mpc_x() - x_ref)) #* np.pi/180
+            u_storage[idx,:] = u
+            
+            self.u.values[1:] = u
+            
+            A,B,C,D = self.linearise(self.x._get_mpc_x(), self.u._get_mpc_u(), _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+                        
+            evals, _ = np.linalg.eig(A-B@K)
+            
+            if np.real(evals)[np.real(evals).argmax()] > 0:
+                
+                print('unstable poles')
+                exit()
             
             print('u:',self.u.values)
-            # print('x:',self.x.values)
             
             self.step(self.u.values)
             
@@ -285,6 +299,182 @@ class test_F16(unittest.TestCase, F16):
         vis_x(x_storage, rng)
         vis_u(u_storage, rng)
         
+    def test_LQR_dynamic_nl(self):
+        
+        self.x.initial_condition, _ = self.trim(10000,700)
+        self.u.initial_condition = self.x.initial_condition[12:16]
+        self.reset()
+        
+        self.paras.time_end = 2
+        
+        # now we have the simulation p r i m e d for timehistory from trim
+        # if the LQR deviates from where it is right now theres a problem
+        # assuming LQR is implemented as u = -K @ (xref - x)
+        
+        A,B,C,D = self.linearise(self.x._get_mpc_x(), self.u._get_mpc_u(), _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+        A,B,C,D = cont2discrete((A,B,C,D), self.paras.dt)[0:4]    
+        
+        x = self.x._get_mpc_x()[:,None]
+        u = self.u._get_mpc_u()[:,None]
+        
+        Q = np.eye(len(x))
+        R = np.eye(len(u))*10000
+        
+        
+            
+        # reference x is trim, i.e. the current state, therefore it should stay there
+        x_ref = np.copy(x)
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        # bar = progressbar.ProgressBar(maxval=len(rng)).start()
+        
+        # create storage
+        x_storage = np.zeros([len(rng),len(self.x.values)])
+        u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
+        xdot_storage = np.zeros([len(rng),len(self.x.values)])
+        
+        x_ref = np.copy(self.x._get_mpc_x())
+        
+        # p_dem = 0
+        # q_dem = 0
+        # r_dem = 0
+        
+        # x_ref[5] = p_dem
+        # x_ref[6] = q_dem
+        # x_ref[7] = r_dem
+
+        for idx, val in enumerate(rng):
+            
+            print('idx:', idx)
+            
+            Ac,Bc,Cc,Dc = self.linearise(self.x._get_mpc_x(), self.u._get_mpc_u(), _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+            A,B,C,D = cont2discrete((Ac,Bc,Cc,Dc), self.paras.dt)[0:4]   
+            K = dlqr(A,B,Q,R)
+            # K = lqr(A,B,Q,R)[0]
+            
+            evals, _ = np.linalg.eig(A-B@K)
+            
+            # if np.real(evals)[np.real(evals).argmax()] > 0:
+                
+            #     print('unstable poles')
+                
+            # return Ac, Bc, K
+            # exit()
+            
+            if np.amax(np.abs(evals)) > 1:
+                
+                print('unstable poles')
+                
+            print('max pole for this time step:', np.amax(np.abs(evals)))
+            
+            cmd = (- K @ (self.x._get_mpc_x() - x_ref)) #* np.pi/180
+            u_storage[idx,:] = cmd
+            self.u.values[1:] = cmd
+            
+            print('u:',self.u.values)
+            
+            self.step(self.u.values)
+            
+            Ac,Bc,Cc,Dc = self.linearise(self.x._get_mpc_x(), self.u._get_mpc_u(), _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+            A,B,C,D = cont2discrete((Ac,Bc,Cc,Dc), self.paras.dt)[0:4]   
+            evals, _ = np.linalg.eig(A-B@K)
+            
+            print('max pole for next time step with old gain:', np.amax(np.abs(evals)))
+            
+            x_storage[idx,:] = self.x.values
+            # bar.update(idx)
+            
+        vis_x(x_storage, rng)
+        vis_u(u_storage, rng)
+        
+    def test_LQR_lin_all_states(self):
+        
+        self.x.initial_condition, _ = self.trim(10000,700)
+        self.u.initial_condition = self.x.initial_condition[12:16]
+        self.reset()
+        
+        x = np.copy(self.x.values)
+        u = np.copy(self.u.values)
+        x_ref = np.copy(self.x.values)[:,None]
+        
+        A,B,C,D = self.linearise(x, u)
+        
+        x = x[:,None]
+        u = u[:,None]
+        
+        A,B,C,D = cont2discrete((A,B,C,D), self.paras.dt)[0:4]
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        # bar = progressbar.ProgressBar(maxval=len(rng)).start()
+        
+        Q = np.eye(len(x)-3)
+        R = np.eye(len(u)) * 0.1
+        
+        Q[0,0] = 0
+        Q[1,1] = 0
+        Q[5,5] = 0
+        
+        r_idx = [2,3,4,6,7,8,9,10,11,12,13,14,15,16,17]
+        
+        Ar = square_mat_degen_2d(A, r_idx)
+        Br = np.vstack((B[2:6,:],  B[7:,:]))
+        K = dlqr(Ar, Br, Q, R)
+        
+        # create storage
+        x_storage = np.zeros([len(rng),len(self.x.values)])
+        u_storage = np.zeros([len(rng),len(self.u.values)])
+        xdot_storage = np.zeros([len(rng),len(self.x.values)])
+        
+        def get_x_red(x):
+            return np.array([x[i,0] for i in r_idx])[:,None]
+        
+        for idx, val in enumerate(rng):
+            
+            u = - K @ (get_x_red(x) - get_x_red(x_ref))
+            x = A @ x + B @ u
+                        
+            x_storage[idx,:] = x[:,0]
+            u_storage[idx,:] = u[:,0]
+            
+        vis_x(x_storage, rng)
+        
+    def test_control(self):
+        
+        """ Function to simulate the MPC controlled F16 to test it is behaving correctly
+        
+        exact methods are TBD """
+        self.x.initial_condition, _ = self.trim(10000,700)
+        self.u.initial_condition = self.x.initial_condition[12:16]
+        self.reset()        
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        # bar = progressbar.ProgressBar(maxval=len(rng)).start()
+        
+        # create storage
+        x_storage = np.zeros([len(rng),len(self.x.values)])
+        u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
+        xdot_storage = np.zeros([len(rng),len(self.x.values)])
+        
+        for idx, val in enumerate(rng):
+            
+            print('idx:', idx)
+            
+
+            # self.u.values[1:] = cmd
+            # self.u.values[0] = self.u.initial_condition[0]
+            print('u:',self.u.values)
+            # self.u.values = np.copy(self.u.initial_condition)
+            
+            # print('u:',self.u.values)
+            # print('x:',self.x.values)
+            
+            self.step(self.u.values)
+            
+            x_storage[idx,:] = self.x.values
+            #bar.update(idx)
+            
+        vis_x(x_storage, rng)
+        vis_u(u_storage, rng)
     
     def test_MPC(self):
         
@@ -329,5 +519,9 @@ class test_F16(unittest.TestCase, F16):
 
 test_f16 = test_F16(state_vector, input_vector, simulation_parameters, nlplant)
 
-x_storage, u_storage, rng = test_f16.test_LQR_lin(f16=True)
-# x = test_f16.test_LQR_lin()
+# x_storage, u_storage, rng, K = test_f16.test_LQR_lin(f16=True)
+# test_f16.test_LQR_lin()
+# test_f16.test_LQR_static_nl()
+# test_f16.test_LQR_dynamic_nl()
+# test_f16.test_LQR_lin_all_states()
+test_f16.test_control()

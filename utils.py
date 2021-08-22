@@ -264,6 +264,10 @@ def square_mat_degen_2d(mat, degen_idx):
     
 #     mat[]
 
+# def dmom(mat, num_mats):
+#     return scipy.linalg.block_diag(np.kron(np.eye(num_mats), mat))
+
+# a much faster implementation: (~40x faster)
 def dmom(mat, num_mats):
     # diagonal matrix of matrices -> dmom
     

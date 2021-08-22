@@ -281,7 +281,7 @@ class F16(gym.Env):
         if get_obs == None:
             get_obs = self.get_obs
         
-        eps = 1e-06
+        eps = 1e-12
         
         A = np.zeros([len(x),len(x)])
         B = np.zeros([len(x),len(u)])
