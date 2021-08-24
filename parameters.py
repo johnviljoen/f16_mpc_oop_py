@@ -130,7 +130,7 @@ udot_lb = [-10000, -60, -80, -120]
 
 # observed_states = ['V','alpha','beta','p','q','r']
 observed_states = ['h','phi','theta','alpha','beta','p','q','r','lf2','lf1']
-mpc_states = ['h','phi','theta','alpha','beta','p','q','r','lf1','lf2']
+mpc_states = ['phi','theta','alpha','beta','p','q','r','lf1','lf2']
 mpc_inputs = ['dh','da','dr']
 mpc_controlled_states = ['p','q','r']
 
@@ -214,6 +214,17 @@ class simulationParameters:
     time_end: float
     stab_flag: int
     fi_flag: int
+    
+@dataclass
+class stateSpace:
+    Ac: np.array
+    Bc: np.array
+    Cc: np.array
+    Dc: np.array
+    Ad: np.array
+    Bd: np.array
+    Cd: np.array
+    Dd: np.array
 
 state_vector = stateVector(
     states,
@@ -244,6 +255,16 @@ simulation_parameters = simulationParameters(
     time_end,
     stab_flag,
     fi_flag)
+
+state_space = stateSpace(
+    np.zeros([len(x0),len(x0)]),
+    np.zeros([len(x0),len(u0)]),
+    np.zeros([len(observed_states),len(x0)]),
+    np.zeros([len(observed_states),len(u0)]),
+    np.zeros([len(x0),len(x0)]),
+    np.zeros([len(x0),len(u0)]),
+    np.zeros([len(observed_states),len(x0)]),
+    np.zeros([len(observed_states),len(u0)]))
 
 # In[additional info provided for brevity]
 

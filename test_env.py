@@ -11,7 +11,7 @@ import progressbar
 import numpy as np
 
 from env import F16
-from parameters import state_vector, input_vector, simulation_parameters, nlplant
+from parameters import state_vector, input_vector, simulation_parameters, state_space, nlplant
 from utils import *
 from scipy.signal import cont2discrete
 import matplotlib.pyplot as plt
@@ -22,8 +22,8 @@ from parameters import x_lb, x_ub, u_lb, u_ub, udot_lb, udot_ub
 
 class test_F16(unittest.TestCase, F16):
     
-    def __init__(self, state_vector, input_vector, simulation_parameters, nlplant):
-        super(unittest.TestCase, self).__init__(state_vector, input_vector, simulation_parameters, nlplant)
+    def __init__(self, state_vector, input_vector, simulation_parameters, state_space, nlplant):
+        super(unittest.TestCase, self).__init__(state_vector, input_vector, simulation_parameters, state_space, nlplant)
     
     def test_upd_thrust(self):
         # self.assertAlmostEqual()
@@ -164,6 +164,7 @@ class test_F16(unittest.TestCase, F16):
             
             x = self.x._get_mpc_x()[:,None]
             u = self.u._get_mpc_u()[:,None]
+            
         
             # reference x is trim, i.e. the current state, therefore it should stay there
             x_ref = np.copy(x)
@@ -197,7 +198,7 @@ class test_F16(unittest.TestCase, F16):
         u_storage = np.zeros([len(rng),len(u)])
         
         for i, val in enumerate(rng):
-            
+                        
             u = - K @ (x - x_ref)
             x = A @ x + B @ u
                         
@@ -224,10 +225,6 @@ class test_F16(unittest.TestCase, F16):
         
         
     def test_LQR_static_nl(self):
-        
-        self.x.initial_condition, _ = self.trim(10000,700)
-        self.u.initial_condition = self.x.initial_condition[12:16]
-        self.reset()
         
         # now we have the simulation p r i m e d for timehistory from trim
         # if the LQR deviates from where it is right now theres a problem
@@ -256,19 +253,8 @@ class test_F16(unittest.TestCase, F16):
         # create storage
         x_storage = np.zeros([len(rng),len(self.x.values)])
         u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
-        xdot_storage = np.zeros([len(rng),len(self.x.values)])
         
         x_ref = np.copy(self.x._get_mpc_x())
-        
-        # p_dem = 0
-        # q_dem = 0
-        # r_dem = 0
-        
-        # x_ref[5] = p_dem
-        # x_ref[6] = q_dem
-        # x_ref[7] = r_dem
-        
-        # return A,B,K
 
         for idx, val in enumerate(rng):
             
@@ -287,7 +273,7 @@ class test_F16(unittest.TestCase, F16):
             if np.real(evals)[np.real(evals).argmax()] > 0:
                 
                 print('unstable poles')
-                exit()
+                
             
             print('u:',self.u.values)
             
@@ -300,10 +286,6 @@ class test_F16(unittest.TestCase, F16):
         vis_u(u_storage, rng)
         
     def test_LQR_dynamic_nl(self):
-        
-        self.x.initial_condition, _ = self.trim(10000,700)
-        self.u.initial_condition = self.x.initial_condition[12:16]
-        self.reset()
         
         self.paras.time_end = 2
         
@@ -320,8 +302,6 @@ class test_F16(unittest.TestCase, F16):
         Q = np.eye(len(x))
         R = np.eye(len(u))*10000
         
-        
-            
         # reference x is trim, i.e. the current state, therefore it should stay there
         x_ref = np.copy(x)
         
@@ -334,14 +314,6 @@ class test_F16(unittest.TestCase, F16):
         xdot_storage = np.zeros([len(rng),len(self.x.values)])
         
         x_ref = np.copy(self.x._get_mpc_x())
-        
-        # p_dem = 0
-        # q_dem = 0
-        # r_dem = 0
-        
-        # x_ref[5] = p_dem
-        # x_ref[6] = q_dem
-        # x_ref[7] = r_dem
 
         for idx, val in enumerate(rng):
             
@@ -350,21 +322,11 @@ class test_F16(unittest.TestCase, F16):
             Ac,Bc,Cc,Dc = self.linearise(self.x._get_mpc_x(), self.u._get_mpc_u(), _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
             A,B,C,D = cont2discrete((Ac,Bc,Cc,Dc), self.paras.dt)[0:4]   
             K = dlqr(A,B,Q,R)
-            # K = lqr(A,B,Q,R)[0]
             
             evals, _ = np.linalg.eig(A-B@K)
             
-            # if np.real(evals)[np.real(evals).argmax()] > 0:
-                
-            #     print('unstable poles')
-                
-            # return Ac, Bc, K
-            # exit()
-            
             if np.amax(np.abs(evals)) > 1:
-                
                 print('unstable poles')
-                
             print('max pole for this time step:', np.amax(np.abs(evals)))
             
             cmd = (- K @ (self.x._get_mpc_x() - x_ref)) #* np.pi/180
@@ -388,14 +350,6 @@ class test_F16(unittest.TestCase, F16):
         vis_u(u_storage, rng)
         
     def test_LQR_lin_all_states(self):
-        
-        self.x.initial_condition, _ = self.trim(10000,700)
-        self.u.initial_condition = self.x.initial_condition[12:16]
-        self.reset()
-        
-        x = np.copy(self.x.values)
-        u = np.copy(self.u.values)
-        x_ref = np.copy(self.x.values)[:,None]
         
         A,B,C,D = self.linearise(x, u)
         
@@ -423,7 +377,6 @@ class test_F16(unittest.TestCase, F16):
         # create storage
         x_storage = np.zeros([len(rng),len(self.x.values)])
         u_storage = np.zeros([len(rng),len(self.u.values)])
-        xdot_storage = np.zeros([len(rng),len(self.x.values)])
         
         def get_x_red(x):
             return np.array([x[i,0] for i in r_idx])[:,None]
@@ -442,36 +395,21 @@ class test_F16(unittest.TestCase, F16):
         
         """ Function to simulate the MPC controlled F16 to test it is behaving correctly
         
-        exact methods are TBD """
-        self.x.initial_condition, _ = self.trim(10000,700)
-        self.u.initial_condition = self.x.initial_condition[12:16]
-        self.reset()        
+        exact methods are TBD """   
         
         rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
-        # bar = progressbar.ProgressBar(maxval=len(rng)).start()
         
         # create storage
         x_storage = np.zeros([len(rng),len(self.x.values)])
         u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
-        xdot_storage = np.zeros([len(rng),len(self.x.values)])
         
         for idx, val in enumerate(rng):
             
             print('idx:', idx)
-            
-
-            # self.u.values[1:] = cmd
-            # self.u.values[0] = self.u.initial_condition[0]
             print('u:',self.u.values)
-            # self.u.values = np.copy(self.u.initial_condition)
-            
-            # print('u:',self.u.values)
-            # print('x:',self.x.values)
-            
+
             self.step(self.u.values)
-            
             x_storage[idx,:] = self.x.values
-            #bar.update(idx)
             
         vis_x(x_storage, rng)
         vis_u(u_storage, rng)
@@ -488,7 +426,6 @@ class test_F16(unittest.TestCase, F16):
         # create storage
         x_storage = np.zeros([len(rng),len(self.x.values)])
         u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
-        xdot_storage = np.zeros([len(rng),len(self.x.values)])
         
         for idx, val in enumerate(rng):
             
@@ -501,12 +438,7 @@ class test_F16(unittest.TestCase, F16):
             cmd = self._calc_MPC_action(p_dem, q_dem, r_dem,10)
             u_storage[idx,:] = cmd
             self.u.values[1:] = cmd
-            # self.u.values[0] = self.u.initial_condition[0]
             print('u:',self.u.values)
-            # self.u.values = np.copy(self.u.initial_condition)
-            
-            # print('u:',self.u.values)
-            # print('x:',self.x.values)
             
             self.step(self.u.values)
             
@@ -516,12 +448,3 @@ class test_F16(unittest.TestCase, F16):
         vis_x(x_storage, rng)
         vis_u(u_storage, rng)
         
-
-test_f16 = test_F16(state_vector, input_vector, simulation_parameters, nlplant)
-
-# x_storage, u_storage, rng, K = test_f16.test_LQR_lin(f16=True)
-# test_f16.test_LQR_lin()
-# test_f16.test_LQR_static_nl()
-# test_f16.test_LQR_dynamic_nl()
-# test_f16.test_LQR_lin_all_states()
-test_f16.test_control()

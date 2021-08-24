@@ -390,34 +390,32 @@ def vis_mpc_u(u_storage, rng):
     
 def vis_mpc_x(x_storage, rng):
     
-    fig1, axs1 = plt.subplots(3, 1)
+    fig1, axs1 = plt.subplots(2, 1)
     #fig.suptitle('Vertically stacked subplots')
-    axs1[0].plot(rng, x_storage[:,0])
-    axs1[0].set_ylabel('h (ft)')
         
-    axs1[1].plot(rng, x_storage[:,1])
-    axs1[1].set_ylabel('$\phi$ (rad)')
+    axs1[0].plot(rng, x_storage[:,0])
+    axs1[0].set_ylabel('phi (rad)')
     
-    axs1[2].plot(rng, x_storage[:,2])
-    axs1[2].set_ylabel('$\theta$ (rad)')
+    axs1[1].plot(rng, x_storage[:,1])
+    axs1[1].set_ylabel('theta (rad)')
     
     fig2, axs2 = plt.subplots(2,1)
     
-    axs2[0].plot(rng, x_storage[:,3]*180/pi)
+    axs2[0].plot(rng, x_storage[:,2]*180/pi)
     axs2[0].set_ylabel('alpha (deg)')
     
-    axs2[1].plot(rng, x_storage[:,4]*180/pi)
+    axs2[1].plot(rng, x_storage[:,3]*180/pi)
     axs2[1].set_ylabel('beta (deg)')
     
     fig3, axs3 = plt.subplots(3,1)
     
-    axs3[0].plot(rng, x_storage[:,5]*180/pi)
+    axs3[0].plot(rng, x_storage[:,4]*180/pi)
     axs3[0].set_ylabel('p (deg/s)')
     
-    axs3[1].plot(rng, x_storage[:,6]*180/pi)
+    axs3[1].plot(rng, x_storage[:,5]*180/pi)
     axs3[1].set_ylabel('q (deg/s)')
     
-    axs3[2].plot(rng, x_storage[:,7]*180/pi)
+    axs3[2].plot(rng, x_storage[:,6]*180/pi)
     axs3[2].set_ylabel('r (deg/s)')
     axs3[2].set_xlabel('time (s)')
 

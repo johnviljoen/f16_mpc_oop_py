@@ -26,19 +26,25 @@ from utils import *
 
 class F16(gym.Env):
     
-    def __init__(self, state_vector, input_vector, simulation_parameters, nlplant):
+    def __init__(self, state_vector, input_vector, simulation_parameters, state_space, nlplant):
         
         super().__init__()
         
         self.x = state_vector                   # mutable state dataclass
         self.u = input_vector                   # mutable input dataclass
         self.paras = simulation_parameters      # immutable simulation parameters dataclass
+        self.ss = state_space                   # mutable state space dataclass
         self.nlplant = nlplant                  # C interface - the heart of the simulation
+        
+        # trim and linearise upon initialisation
+        self.x.initial_condition, _ = self.trim(10000, 700)
+        self.u.initial_condition = np.copy(self.x.initial_condition[12:16])
+        self.reset()
+        self.ss.Ac, self.ss.Bc, self.ss.Cc, self.ss.Dc = self.linearise(self.x.values, self.u.values)
+        self.ss.Ad, self.ss.Bd, self.ss.Cd, self.ss.Dd = cont2discrete((self.ss.Ac, self.ss.Bc, self.ss.Cc, self.ss.Dc), self.paras.dt)[0:4]
         
         # self.action_space = spaces.Box(low=self.u.lower_cmd_bound, high=self.u.upper_cmd_bound, dtype=np.float32)
         # self.observation_space = spaces.Box(low=self.x.lower_bound, high=self.x.upper_bound, shape=(len(self.x.states)), dtype=np.float32)
-        
-        
         
     def _calc_xdot(self, x, u):
         
@@ -278,15 +284,18 @@ class F16(gym.Env):
         
         if _calc_xdot == None:
             _calc_xdot = self._calc_xdot
+            C = np.zeros([len(self.x._obs_x_idx),len(x)])
+            D = np.zeros([len(self.x._obs_x_idx),len(u)])
         if get_obs == None:
             get_obs = self.get_obs
+        if _calc_xdot == self._calc_xdot_na:
+            C = np.zeros([len(self.x._mpc_obs_x_idx),len(x)])
+            D = np.zeros([len(self.x._mpc_obs_x_idx),len(u)])
         
-        eps = 1e-12
+        eps = 1e-05
         
         A = np.zeros([len(x),len(x)])
         B = np.zeros([len(x),len(u)])
-        C = np.zeros([len(self.x._mpc_obs_x_idx),len(x)])
-        D = np.zeros([len(self.x._mpc_obs_x_idx),len(u)])
         
         # Perturb each of the state variables and compute linearization
         for i in range(len(x)):
@@ -388,7 +397,7 @@ class F16(gym.Env):
         
         return res.x[0:len(u)]
     
-    def calc_constr_checking_hzn(self):
+    def _calc_constr_checking_hzn(self):
         
         max_hzn = 150
         
@@ -399,6 +408,7 @@ class F16(gym.Env):
             u[:,i] = self._calc_MPC_action(0, 0, 0, i+1)
             
         return u
+    
         
 
     

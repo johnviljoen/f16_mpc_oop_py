@@ -19,20 +19,14 @@ import osqp
 
 # custom files
 from env import F16
-from parameters import state_vector, input_vector, simulation_parameters, nlplant
+from test_env import test_F16
+from parameters import state_vector, input_vector, simulation_parameters, state_space, nlplant
 
-f16 = F16(state_vector, input_vector, simulation_parameters, nlplant)
+f16 = F16(state_vector, input_vector, simulation_parameters, state_space, nlplant)
+test_f16 = test_F16(state_vector, input_vector, simulation_parameters, state_space, nlplant)
 
-# res = f16._calc_MPC_action(2,0,0,10)
+test_f16.test_control()
 
-x_trim, _ = f16.trim(10000,700)
-
-f16.x.initial_condition = x_trim
-
-f16.
-
-
-# A,B,Q,R = f16._calc_MPC_action(0,0,0,10)
 
 
 exit()
