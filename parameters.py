@@ -28,7 +28,7 @@ fi_flag = 1
 # stability_flag only functional for high fidelity model currently!
 # stability_flag = 1 -> unstable xcg 35% model
 # stability_flag = 0 -> stable xcg 25% model
-stab_flag = 0
+stab_flag = 1
 
 # In[initial_conditions]  
 

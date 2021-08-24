@@ -20,6 +20,7 @@ import scipy
 import osqp
 from scipy.sparse import csc_matrix
 from sys import exit
+from parameters import stateSpace
 
 # custom files
 from utils import *
@@ -42,6 +43,20 @@ class F16(gym.Env):
         self.reset()
         self.ss.Ac, self.ss.Bc, self.ss.Cc, self.ss.Dc = self.linearise(self.x.values, self.u.values)
         self.ss.Ad, self.ss.Bd, self.ss.Cd, self.ss.Dd = cont2discrete((self.ss.Ac, self.ss.Bc, self.ss.Cc, self.ss.Dc), self.paras.dt)[0:4]
+        
+        # form reduced state space for mpc (ssr)   
+        Ac,Bc,Cc,Dc = self.linearise(self.x._get_mpc_x(), self.u._get_mpc_u(), _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
+        Ad,Bd,Cd,Dd = cont2discrete((Ac,Bc,Cc,Dc), self.paras.dt)[0:4]
+        
+        self.ssr = stateSpace(
+            Ac,
+            Bc,
+            Cc,
+            Dc,
+            Ad,
+            Bd,
+            Cd,
+            Dd)
         
         # self.action_space = spaces.Box(low=self.u.lower_cmd_bound, high=self.u.upper_cmd_bound, dtype=np.float32)
         # self.observation_space = spaces.Box(low=self.x.lower_bound, high=self.x.upper_bound, shape=(len(self.x.states)), dtype=np.float32)
@@ -324,9 +339,6 @@ class F16(gym.Env):
         u = self.u._get_mpc_u()
         
         A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
-        
-
-        
         A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
         
         Q = C.T @ C
@@ -347,38 +359,30 @@ class F16(gym.Env):
         x_dem = np.array([p_dem, q_dem, r_dem])
         
         x_ref[5:8] = x_dem
-        # x_ref[1] = 0
-
-        
-        # return x_ref
                 
-        A,B,C,D = self.linearise(x, u, _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
-        
-        # print('A:',A)
-        # print('B:',B)
-        # print('C:',C)
-        # print('D:',D)
-        
-        A,B,C,D = cont2discrete((A,B,C,D), dt)[0:4]
+        A = self.ssr.Ad
+        B = self.ssr.Bd
+        C = self.ssr.Cd
                 
         Q = C.T @ C # penalise states
-        # print('Q:',Q.shape)
         
-        # ['h', 'phi', 'theta', 'alpha', 'beta', 'p', 'q', 'r', 'lf1', 'lf2']
+        # ['phi', 'theta', 'alpha', 'beta', 'p', 'q', 'r', 'lf1', 'lf2']
         
-        Q[0,0] = 0.01
-        Q[1,1] = 0
-        Q[2,2] = 0.01
-        Q[3,3] = 0.01
-        Q[4,4] = 0
-        Q[5,5] = 1 # p
-        Q[6,6] = 1 # q
-        Q[7,7] = 1 # r
-        Q[8,8] = 0
-        Q[9,9] = 0
+        # Q[0,0] = 0.01
+        # Q[1,1] = 0
+        # Q[2,2] = 0.01
+        # Q[3,3] = 0.01
+        # Q[4,4] = 0
+        # Q[5,5] = 1 # p
+        # Q[6,6] = 1 # q
+        # Q[7,7] = 1 # r
+        # Q[8,8] = 0
+        # Q[9,9] = 0
         # R = np.eye(len(u)) * 0.01 # penalise inputs
         
-        R = np.array([[0.001,0,0],[0,1,0],[0,0,0.01]])
+        R = np.array([[0.001,   0,  0   ],
+                      [0,       1,  0   ],
+                      [0,       0,  0.01]])
                 
         OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = setup_OSQP(
             x_ref, A, B, Q, R, hzn, dt, x, act_states,\

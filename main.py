@@ -11,7 +11,6 @@ from stable_baselines3 import A2C
 from stable_baselines3.common.vec_env import DummyVecEnv
 from scipy.signal import cont2discrete
 import numpy as np
-from scipy.signal import cont2discrete
 from stable_baselines3.common.env_checker import check_env
 from sys import exit
 from scipy.sparse import csc_matrix
@@ -25,9 +24,8 @@ from parameters import state_vector, input_vector, simulation_parameters, state_
 f16 = F16(state_vector, input_vector, simulation_parameters, state_space, nlplant)
 test_f16 = test_F16(state_vector, input_vector, simulation_parameters, state_space, nlplant)
 
-test_f16.test_control()
-
-
+# test_f16.offline_LQR_nl()
+test_f16.offline_LQR_lin()
 
 exit()
 

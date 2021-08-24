@@ -11,7 +11,7 @@ import progressbar
 import numpy as np
 
 from env import F16
-from parameters import state_vector, input_vector, simulation_parameters, state_space, nlplant
+# from parameters import state_vector, input_vector, simulation_parameters, state_space, nlplant
 from utils import *
 from scipy.signal import cont2discrete
 import matplotlib.pyplot as plt
@@ -150,6 +150,134 @@ class test_F16(unittest.TestCase, F16):
         
         pass
     
+    def offline_LQR_nl(self):
+        
+        self.paras.time_end = 10
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        
+        # create storage
+        x_storage = np.zeros([len(rng),self.ss.Ad.shape[0]])
+        u_storage = np.zeros([len(rng),self.ss.Bd.shape[1]])
+        
+        Q = self.ssr.Cd.T @ self.ssr.Cd
+        R = np.eye(3)
+        
+        K = dlqr(self.ssr.Ad, self.ssr.Bd, Q, R)
+        
+        x_ref = np.copy(self.x._get_mpc_x())
+        
+        u0 = np.copy(self.u._get_mpc_u())
+        
+        for idx, val in enumerate(rng):
+            
+            print('idx:', idx)
+
+            self.step(self.u.values)
+            print('u:',self.u.values)
+            x_storage[idx,:] = self.x.values
+            u_storage[idx,:] = self.u.values
+            
+            u = u0 - K @ (self.x._get_mpc_x() - x_ref)
+            self.u.values[1:] = u
+            
+        vis_x(x_storage, rng)
+        vis_u(u_storage, rng)
+        
+    def offline_LQR_lin(self):
+        
+        self.paras.time_end = 10
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        
+        # create storage
+        x_storage = np.zeros([len(rng),self.ssr.Ad.shape[0]])
+        u_storage = np.zeros([len(rng),self.ssr.Bd.shape[1]])
+        
+        Q = self.ssr.Cd.T @ self.ssr.Cd
+        R = np.eye(3)
+        
+        K = dlqr(self.ssr.Ad, self.ssr.Bd, Q, R)
+        
+        x_ref = np.copy(self.x._get_mpc_x())
+        
+        u0 = np.copy(self.u._get_mpc_u())
+        x = np.copy(self.x._get_mpc_x())
+        u = np.copy(u0)
+        
+        for idx, val in enumerate(rng):
+            
+            print('idx:', idx)
+            print('u:',u)
+            
+            u = u0 - K @ (x - x_ref)
+            u = u0
+            
+            x = self.ssr.Ad @ x + self.ssr.Bd @ u
+            
+            x_storage[idx,:] = x
+            u_storage[idx,:] = u
+                        
+        vis_mpc_x(x_storage, rng)
+        vis_mpc_u(u_storage, rng)
+        
+    def test_control(self):
+        
+        """ Function to simulate the MPC controlled F16 to test it is behaving correctly
+        
+        exact methods are TBD """   
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        
+        # create storage
+        x_storage = np.zeros([len(rng),len(self.x.values)])
+        u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
+        
+        for idx, val in enumerate(rng):
+            
+            print('idx:', idx)
+            print('u:',self.u.values)
+
+            self.step(self.u.values)
+            x_storage[idx,:] = self.x.values
+            
+        vis_x(x_storage, rng)
+        vis_u(u_storage, rng)
+    
+    def test_MPC(self):
+        
+        """ Function to simulate the MPC controlled F16 to test it is behaving correctly
+        
+        exact methods are TBD """
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        # bar = progressbar.ProgressBar(maxval=len(rng)).start()
+        
+        # create storage
+        x_storage = np.zeros([len(rng),len(self.x.values)])
+        u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
+        
+        for idx, val in enumerate(rng):
+            
+            p_dem = 0 * np.pi/180 # rad
+            q_dem = 0 * np.pi/180  # rad
+            r_dem = 0   # rad
+            
+            print('idx:', idx)
+            
+            cmd = self._calc_MPC_action(p_dem, q_dem, r_dem,10)
+            u_storage[idx,:] = cmd
+            self.u.values[1:] = cmd
+            print('u:',self.u.values)
+            
+            self.step(self.u.values)
+            
+            x_storage[idx,:] = self.x.values
+            #bar.update(idx)
+            
+        vis_x(x_storage, rng)
+        vis_u(u_storage, rng)
+        
     def test_LQR_lin(self, f16=True):
         
         if f16:
@@ -390,61 +518,3 @@ class test_F16(unittest.TestCase, F16):
             u_storage[idx,:] = u[:,0]
             
         vis_x(x_storage, rng)
-        
-    def test_control(self):
-        
-        """ Function to simulate the MPC controlled F16 to test it is behaving correctly
-        
-        exact methods are TBD """   
-        
-        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
-        
-        # create storage
-        x_storage = np.zeros([len(rng),len(self.x.values)])
-        u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
-        
-        for idx, val in enumerate(rng):
-            
-            print('idx:', idx)
-            print('u:',self.u.values)
-
-            self.step(self.u.values)
-            x_storage[idx,:] = self.x.values
-            
-        vis_x(x_storage, rng)
-        vis_u(u_storage, rng)
-    
-    def test_MPC(self):
-        
-        """ Function to simulate the MPC controlled F16 to test it is behaving correctly
-        
-        exact methods are TBD """
-        
-        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
-        # bar = progressbar.ProgressBar(maxval=len(rng)).start()
-        
-        # create storage
-        x_storage = np.zeros([len(rng),len(self.x.values)])
-        u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
-        
-        for idx, val in enumerate(rng):
-            
-            p_dem = 0 * np.pi/180 # rad
-            q_dem = 0 * np.pi/180  # rad
-            r_dem = 0   # rad
-            
-            print('idx:', idx)
-            
-            cmd = self._calc_MPC_action(p_dem, q_dem, r_dem,10)
-            u_storage[idx,:] = cmd
-            self.u.values[1:] = cmd
-            print('u:',self.u.values)
-            
-            self.step(self.u.values)
-            
-            x_storage[idx,:] = self.x.values
-            #bar.update(idx)
-            
-        vis_x(x_storage, rng)
-        vis_u(u_storage, rng)
-        
