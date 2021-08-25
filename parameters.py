@@ -109,6 +109,8 @@ if stab_flag == 1:
     so_file = os.getcwd() + "/C/nlplant_xcg35.so"
 elif stab_flag == 0:
     so_file = os.getcwd() + "/C/nlplant_xcg25.so"
+    
+so_file = os.getcwd() + "/C/nlplant.so"
 nlplant = CDLL(so_file)
 
 states = ['npos','epos','h','phi','theta','psi','V','alpha','beta','p','q','r','T','dh','da','dr','lf2','lf1']
