@@ -601,6 +601,20 @@ void Jac(double *xu, double *xdot, int fidelity, double *jac){ //I modified to h
   double Cl_tot, Cl, delta_Cl_lef, dLdail, delta_Cl_r30, dLdR, dLdP, delta_Clbeta;
   double delta_Cl_a20, delta_Cl_a20_lef, Clr, delta_Clr_lef, Clp, delta_Clp_lef;
 
+  double pCx_tot, pCx, pdelta_Cx_lef, pdXdQ, pCxq, pdelta_Cxq_lef;
+  double pCz_tot, pCz, pdelta_Cz_lef, pdZdQ, pCzq, pdelta_Czq_lef;
+  double pCm_tot, pCm, peta_el, pdelta_Cm_lef, pdMdQ, pCmq, pdelta_Cmq_lef, pdelta_Cm, pdelta_Cm_ds;
+  double pCy_tot, pCy, pdelta_Cy_lef, pdYdail, pdelta_Cy_r30, pdYdR, pdYdP;
+  double pdelta_Cy_a20, pdelta_Cy_a20_lef, pCyr, pdelta_Cyr_lef, pCyp, pdelta_Cyp_lef;
+  double pCn_tot, pCn, pdelta_Cn_lef, pdNdail, pdelta_Cn_r30, pdNdR, pdNdP, pdelta_Cnbeta;
+  double pdelta_Cn_a20, pdelta_Cn_a20_lef, pCnr, pdelta_Cnr_lef, pCnp, pdelta_Cnp_lef;
+  double pCl_tot, pCl, pdelta_Cl_lef, pdLdail, pdelta_Cl_r30, pdLdR, pdLdP, pdelta_Clbeta;
+  double pdelta_Cl_a20, pdelta_Cl_a20_lef, pClr, pdelta_Clr_lef, pClp, pdelta_Clp_lef;
+
+  double eps;
+
+  eps = 1e-5;
+
   temp = (double *)malloc(9*sizeof(double));  /*size of 9.1 array*/
 
   r2d  = 180.0/pi;     /* radians to degrees */
@@ -719,6 +733,13 @@ xdot[5] = (Q*sphi + R*cphi)/ct;
 
 if (fi_flag == 1)          /* HIFI Table */
 {
+
+   // Coefficents tables
+
+   double dCxda, dCzda, dCmda, dCyda, dCnda, dClda;
+   double dCxdb, dCzdb, dCmdb, dCydb, dCndb, dCldb;
+   double dCxdel, dCzdel, dCmdel, dCydel, dCndel, dCldel;
+
     hifi_C(alpha,beta,el,temp);
         Cx = temp[0];
         Cz = temp[1];
@@ -726,6 +747,34 @@ if (fi_flag == 1)          /* HIFI Table */
         Cy = temp[3];
         Cn = temp[4];
         Cl = temp[5];
+
+    hifi_C(alpha+eps,beta,el,temp);
+        dCxda = (Cx - temp[0])/eps;
+        dCzda = (Cz - temp[1])/eps;
+        dCmda = (Cm - temp[2])/eps;
+        dCyda = (Cy - temp[3])/eps;
+        dCnda = (Cn - temp[4])/eps;
+        dClda = (Cl - temp[5])/eps;
+
+    hifi_C(alpha,beta+eps,el,temp);
+        dCxdb = (Cx - temp[0])/eps;
+        dCzdb = (Cz - temp[1])/eps;
+        dCmdb = (Cm - temp[2])/eps;
+        dCydb = (Cy - temp[3])/eps;
+        dCndb = (Cn - temp[4])/eps;
+        dCldb = (Cl - temp[5])/eps;
+
+    hifi_C(alpha,beta,el+eps,temp);
+        dCxdel = (Cx - temp[0])/eps;
+        dCzdel = (Cz - temp[1])/eps;
+        dCmdel = (Cm - temp[2])/eps;
+        dCydel = (Cy - temp[3])/eps;
+        dCndel = (Cn - temp[4])/eps;
+        dCldel = (Cl - temp[5])/eps;
+
+    // dampings
+
+   double dCxqda, dCyrda, dCypda, dCzqda, dClrda, dClpda, dCmqda, dCnrda, dCnpda;
 
     hifi_damping(alpha,temp);
         Cxq = temp[0];
@@ -738,6 +787,22 @@ if (fi_flag == 1)          /* HIFI Table */
         Cnr = temp[7];
         Cnp = temp[8];
 
+    hifi_damping(alpha+eps,temp);
+        dCxqda = (Cxq - temp[0])/eps;
+        dCyrda = (Cyr - temp[1])/eps;
+        dCypda = (Cyp - temp[2])/eps;
+        dCzqda = (Czq - temp[3])/eps;
+        dClrda = (Clr - temp[4])/eps;
+        dClpda = (Clp - temp[5])/eps;
+        dCmqda = (Cmq - temp[6])/eps;
+        dCnrda = (Cnr - temp[7])/eps;
+        dCnpda = (Cnp - temp[8])/eps;
+
+   // lef coefficients
+
+   double ddelta_Cx_lefda, ddelta_Cz_lefda, ddelta_Cm_lefda, ddelta_Cy_lefda, ddelta_Cn_lefda, ddelta_Cl_lefda;
+   double ddelta_Cx_lefdb, ddelta_Cz_lefdb, ddelta_Cm_lefdb, ddelta_Cy_lefdb, ddelta_Cn_lefdb, ddelta_Cl_lefdb;
+
     hifi_C_lef(alpha,beta,temp);
         delta_Cx_lef = temp[0];
         delta_Cz_lef = temp[1];
@@ -745,6 +810,26 @@ if (fi_flag == 1)          /* HIFI Table */
         delta_Cy_lef = temp[3];
         delta_Cn_lef = temp[4];
         delta_Cl_lef = temp[5];
+
+    hifi_C_lef(alpha+eps,beta,temp);
+        ddelta_Cx_lefda = (delta_Cx_lef - temp[0])/eps;
+        ddelta_Cz_lefda = (delta_Cz_lef - temp[1])/eps;
+        ddelta_Cm_lefda = (delta_Cm_lef - temp[2])/eps;
+        ddelta_Cy_lefda = (delta_Cy_lef - temp[3])/eps;
+        ddelta_Cn_lefda = (delta_Cn_lef - temp[4])/eps;
+        ddelta_Cl_lefda = (delta_Cl_lef - temp[5])/eps;
+
+    hifi_C_lef(alpha,beta+eps,temp);
+        ddelta_Cx_lefdb = (delta_Cx_lef - temp[0])/eps;
+        ddelta_Cz_lefdb = (delta_Cz_lef - temp[1])/eps;
+        ddelta_Cm_lefdb = (delta_Cm_lef - temp[2])/eps;
+        ddelta_Cy_lefdb = (delta_Cy_lef - temp[3])/eps;
+        ddelta_Cn_lefdb = (delta_Cn_lef - temp[4])/eps;
+        ddelta_Cl_lefdb = (delta_Cl_lef - temp[5])/eps;    
+
+   // lef damping
+
+   double ddelta_Cxq_lefda, ddelta_Cyr_lefda, ddelta_Cyp_lefda, ddelta_Czq_lefda, ddelta_Clr_lefda, ddelta_Clp_lefda, ddelta_Cmq_lefda, ddelta_Cnr_lefda, ddelta_Cnp_lefda;
 
     hifi_damping_lef(alpha,temp);
         delta_Cxq_lef = temp[0];
@@ -757,10 +842,41 @@ if (fi_flag == 1)          /* HIFI Table */
         delta_Cnr_lef = temp[7];
         delta_Cnp_lef = temp[8];
 
+    hifi_damping_lef(alpha+eps,temp);
+        ddelta_Cxq_lefda = temp[0];
+        ddelta_Cyr_lefda = temp[1];
+        ddelta_Cyp_lefda = temp[2];
+        ddelta_Czq_lefda = temp[3];
+        ddelta_Clr_lefda = temp[4];
+        ddelta_Clp_lefda = temp[5];
+        ddelta_Cmq_lefda = temp[6];
+        ddelta_Cnr_lefda = temp[7];
+        ddelta_Cnp_lefda = temp[8];
+
+   // rudder
+
+   double ddelta_Cy_r30da, ddelta_Cn_r30da, ddelta_Cl_r30da;
+   double ddelta_Cy_r30db, ddelta_Cn_r30db, ddelta_Cl_r30db;
+
     hifi_rudder(alpha,beta,temp);
         delta_Cy_r30 = temp[0];
         delta_Cn_r30 = temp[1];
         delta_Cl_r30 = temp[2];
+
+    hifi_rudder(alpha+eps,beta,temp);
+        ddelta_Cy_r30da = (delta_Cy_r30 - temp[0])/eps;
+        ddelta_Cn_r30da = (delta_Cn_r30 - temp[1])/eps;
+        ddelta_Cl_r30da = (delta_Cl_r30 - temp[2])/eps;
+
+    hifi_rudder(alpha,beta+eps,temp);
+        ddelta_Cy_r30db = (delta_Cy_r30 - temp[0])/eps;
+        ddelta_Cn_r30db = (delta_Cn_r30 - temp[1])/eps;
+        ddelta_Cl_r30db = (delta_Cl_r30 - temp[2])/eps;
+
+   // aileron
+
+   double ddelta_Cy_a20da, ddelta_Cy_a20_lefda, ddelta_Cn_a20da, ddelta_Cn_a20_lefda, ddelta_Cl_a20da, ddelta_Cl_a20_lefda;
+   double ddelta_Cy_a20db, ddelta_Cy_a20_lefdb, ddelta_Cn_a20db, ddelta_Cn_a20_lefdb, ddelta_Cl_a20db, ddelta_Cl_a20_lefdb;
 
     hifi_ailerons(alpha,beta,temp);
         delta_Cy_a20     = temp[0];
@@ -770,95 +886,49 @@ if (fi_flag == 1)          /* HIFI Table */
         delta_Cl_a20     = temp[4];
         delta_Cl_a20_lef = temp[5];
 
+    hifi_ailerons(alpha+eps,beta,temp);
+        ddelta_Cy_a20da     = (delta_Cy_a20 - temp[0])/eps;
+        ddelta_Cy_a20_lefda = (delta_Cy_a20_lef - temp[1])/eps;
+        ddelta_Cn_a20da     = (delta_Cy_a20 - temp[2])/eps;
+        ddelta_Cn_a20_lefda = (delta_Cy_a20_lef - temp[3])/eps;
+        ddelta_Cl_a20da     = (delta_Cy_a20 - temp[4])/eps;
+        ddelta_Cl_a20_lefda = (delta_Cy_a20_lef - temp[5])/eps;
+
+    hifi_ailerons(alpha,beta+eps,temp);
+        ddelta_Cy_a20db     = (delta_Cy_a20 - temp[0])/eps;
+        ddelta_Cy_a20_lefdb = (delta_Cy_a20_lef - temp[1])/eps;
+        ddelta_Cn_a20db     = (delta_Cy_a20 - temp[2])/eps;
+        ddelta_Cn_a20_lefdb = (delta_Cy_a20_lef - temp[3])/eps;
+        ddelta_Cl_a20db     = (delta_Cy_a20 - temp[4])/eps;
+        ddelta_Cl_a20_lefdb = (delta_Cy_a20_lef - temp[5])/eps;
+
+   // other coeffs
+
+   double ddelta_Cnbetada, ddelta_Clbetada, ddelta_Cmda, deta_elda, ddelta_Cm_dsda;
+   double ddelta_Cnbetadel, ddelta_Clbetadel, ddelta_Cmdel, deta_eldel, ddelta_Cm_dsdel;
+
     hifi_other_coeffs(alpha,el,temp);
         delta_Cnbeta = temp[0];
         delta_Clbeta = temp[1];
         delta_Cm     = temp[2];
         eta_el       = temp[3];
         delta_Cm_ds  = 0;        /* ignore deep-stall effect */
+
+    hifi_other_coeffs(alpha+eps,el,temp);
+        ddelta_Cnbetada = (delta_Cnbeta - temp[0])/eps;
+        ddelta_Clbetada = (delta_Clbeta - temp[1])/eps;
+        ddelta_Cmda     = (delta_Cm - temp[2])/eps;
+        deta_elda       = (eta_el - temp[3])/eps;
+        ddelta_Cm_dsda  = 0;        /* ignore deep-stall effect */
+
+    hifi_other_coeffs(alpha,el+eps,temp);
+        ddelta_Cnbetadel = (delta_Cnbeta - temp[0])/eps;
+        ddelta_Clbetadel = (delta_Clbeta - temp[1])/eps;
+        ddelta_Cmdel     = (delta_Cm - temp[2])/eps;
+        deta_eldel       = (eta_el - temp[3])/eps;
+        ddelta_Cm_dsdel  = 0;        /* ignore deep-stall effect */        
     
 }
-
-else if (fi_flag == 0)
-{     
-/* ##############################################
-   ##########LOFI Table Look-up #################
-   ##############################################*/
-
-/* The lofi model does not include the
-   leading edge flap.  All terms multiplied
-   dlef have been set to zero but just to 
-   be sure we will set it to zero. */
-    
-    dlef = 0.0;     
-
-    damping(alpha,temp);
-        Cxq = temp[0];
-        Cyr = temp[1];
-        Cyp = temp[2];
-        Czq = temp[3];
-        Clr = temp[4];
-        Clp = temp[5];
-        Cmq = temp[6];
-        Cnr = temp[7];
-        Cnp = temp[8];
-
-    dmomdcon(alpha,beta, temp);
-        delta_Cl_a20 = temp[0];     /* Formerly dLda in nlplant.c */
-        delta_Cl_r30 = temp[1];     /* Formerly dLdr in nlplant.c */
-        delta_Cn_a20 = temp[2];     /* Formerly dNda in nlplant.c */
-        delta_Cn_r30 = temp[3];     /* Formerly dNdr in nlplant.c */
-
-    clcn(alpha,beta,temp);
-        Cl = temp[0];
-        Cn = temp[1];
-
-    cxcm(alpha,el,temp);
-        Cx = temp[0];
-        Cm = temp[1];
-
-    Cy = -.02*beta + .021*dail + .086*drud;
-
-    cz(alpha,beta,el,temp);
-        Cz = temp[0];
-/*##################################################
-        
-        
-/*##################################################
-  ##  Set all higher order terms of hifi that are ##
-  ##  not applicable to lofi equal to zero. ########
-  ##################################################*/
-     
-        delta_Cx_lef    = 0.0;
-        delta_Cz_lef    = 0.0;
-        delta_Cm_lef    = 0.0;
-        delta_Cy_lef    = 0.0;
-        delta_Cn_lef    = 0.0;
-        delta_Cl_lef    = 0.0;
-        delta_Cxq_lef   = 0.0;
-        delta_Cyr_lef   = 0.0;
-        delta_Cyp_lef   = 0.0;
-        delta_Czq_lef   = 0.0;
-        delta_Clr_lef   = 0.0;
-        delta_Clp_lef   = 0.0;
-        delta_Cmq_lef   = 0.0;
-        delta_Cnr_lef   = 0.0;
-        delta_Cnp_lef   = 0.0;
-        delta_Cy_r30    = 0.0;
-        delta_Cy_a20    = 0.0;
-        delta_Cy_a20_lef= 0.0;
-        delta_Cn_a20_lef= 0.0;
-        delta_Cl_a20_lef= 0.0;
-        delta_Cnbeta    = 0.0;
-        delta_Clbeta    = 0.0;
-        delta_Cm        = 0.0;
-        eta_el          = 1.0;     /* Needs to be one. See equation for Cm_tot*/
-        delta_Cm_ds     = 0.0;
-                     
-/*##################################################
-  ##################################################*/ 
-}
-
 
 /* %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 compute Cx_tot, Cz_tot, Cm_tot, Cy_tot, Cn_tot, and Cl_tot
@@ -1001,6 +1071,7 @@ jac[8] = - cb*vt*(cphi*spsi - cpsi*sphi*st) - sa*sb*vt*(sphi*spsi + cphi*cpsi*st
 jac[9] = 0; 
 jac[10] = 0; 
 jac[11] = 0; 
+
 jac[12] = 0; 
 jac[13] = 0; 
 jac[14] = 0; 
@@ -1013,6 +1084,7 @@ jac[20] = cb*vt*(cphi*cpsi + sphi*spsi*st) + sa*sb*vt*(cpsi*sphi - cphi*spsi*st)
 jac[21] = 0; 
 jac[22] = 0; 
 jac[23] = 0; 
+
 jac[24] = 0; 
 jac[25] = 0; 
 jac[26] = 0; 
@@ -1025,6 +1097,7 @@ jac[32] = cphi*ct*sa*sb*vt - ca*sb*st*vt - cb*ct*sphi*vt;
 jac[33] = 0; 
 jac[34] = 0; 
 jac[35] = 0; 
+
 jac[36] = 0; 
 jac[37] = 0; 
 jac[38] = 0; 
@@ -1037,6 +1110,7 @@ jac[44] = 0;
 jac[45] = 1; 
 jac[46] = sphi*tt; 
 jac[47] = cphi*tt; 
+
 jac[48] = 0; 
 jac[49] = 0; 
 jac[50] = 0; 
@@ -1049,6 +1123,7 @@ jac[56] = 0;
 jac[57] = 0; 
 jac[58] = cphi; 
 jac[59] = -sphi; 
+
 jac[60] = 0; 
 jac[61] = 0; 
 jac[62] = 0; 
@@ -1061,6 +1136,7 @@ jac[68] = 0;
 jac[69] = 0; 
 jac[70] = sphi/ct; 
 jac[71] = cphi/ct; 
+
 jac[72] = 0; 
 jac[73] = 0; 
 jac[74] = -((0.000000034590341700000001074671459439479*S*sb*pow(vt,3)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cy + (delta_Cy_r30*rud)/30 + (2*ail*(delta_Cy_a20 - delta_Cy_a20_lef*(lef/25 - 1)))/43 - delta_Cy_lef*(lef/25 - 1) + (B*P*(Cyp - delta_Cyp_lef*(lef/25 - 1)))/(2*vt) + (B*R*(Cyr - delta_Cyr_lef*(lef/25 - 1)))/(2*vt)))/m + (0.000000034590341700000001074671459439479*S*ca*cb*pow(vt,3)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cx - delta_Cx_lef*(lef/25 - 1) + (Q*cbar*(Cxq - delta_Cxq_lef*(lef/25 - 1)))/(2*vt)))/m + (0.000000034590341700000001074671459439479*S*cb*sa*pow(vt,3)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cz - delta_Cz_lef*(lef/25 - 1) + (Q*cbar*(Czq - delta_Cz_lef*(lef/25 - 1)))/(2*vt)))/m)/vt; 
@@ -1073,6 +1149,7 @@ jac[80] = -(sb*vt*(P*sa*sb*vt - R*ca*sb*vt) - cb*vt*(ct*g*sphi - R*ca*cb*vt + P*
 jac[81] = (sb*vt*(cb*sa*vt + (0.00059425000000000005161843175116587*B*S*vt*(Cyp - delta_Cyp_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m) - cb*sa*sb*pow(vt,2))/vt; 
 jac[82] = -(ca*cb*vt*(cb*sa*vt - (0.00059425000000000005161843175116587*S*cbar*vt*(Cxq - delta_Cxq_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m) - cb*sa*vt*(ca*cb*vt + (0.00059425000000000005161843175116587*S*cbar*vt*(Czq - delta_Cz_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m))/vt; 
 jac[83] = -(sb*vt*(ca*cb*vt - (0.00059425000000000005161843175116587*B*S*vt*(Cyr - delta_Cyr_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m) - ca*cb*sb*pow(vt,2))/vt; 
+
 jac[84] = 0; 
 jac[85] = 0; 
 jac[86] = -((0.000000034590341700000001074671459439479*S*ca*cb*pow(vt,3)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cz - delta_Cz_lef*(lef/25 - 1) + (Q*cbar*(Czq - delta_Cz_lef*(lef/25 - 1)))/(2*vt)))/m - (0.000000034590341700000001074671459439479*S*cb*sa*pow(vt,3)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cx - delta_Cx_lef*(lef/25 - 1) + (Q*cbar*(Cxq - delta_Cxq_lef*(lef/25 - 1)))/(2*vt)))/m)/(pow(ca,2)*pow(cb,2)*pow(vt,2) + pow(cb,2)*pow(sa,2)*pow(vt,2)); 
@@ -1085,6 +1162,7 @@ jac[92] = - (ca*sb*vt*(cphi*ct*g - P*sb*vt + Q*ca*cb*vt + (0.0011885000000000001
 jac[93] = -(ca*cb*sb*pow(vt,2))/(pow(ca,2)*pow(cb,2)*pow(vt,2) + pow(cb,2)*pow(sa,2)*pow(vt,2)); 
 jac[94] = (ca*cb*vt*(ca*cb*vt + (0.00059425000000000005161843175116587*S*cbar*vt*(Czq - delta_Cz_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m) + cb*sa*vt*(cb*sa*vt - (0.00059425000000000005161843175116587*S*cbar*vt*(Cxq - delta_Cxq_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m))/(pow(ca,2)*pow(cb,2)*pow(vt,2) + pow(cb,2)*pow(sa,2)*pow(vt,2)); 
 jac[95] = -(cb*sa*sb*pow(vt,2))/(pow(ca,2)*pow(cb,2)*pow(vt,2) + pow(cb,2)*pow(sa,2)*pow(vt,2)); 
+
 jac[96] = 0; 
 jac[97] = 0; 
 jac[98] = (sb*((0.000000034590341700000001074671459439479*S*sb*pow(vt,3)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cy + (delta_Cy_r30*rud)/30 + (2*ail*(delta_Cy_a20 - delta_Cy_a20_lef*(lef/25 - 1)))/43 - delta_Cy_lef*(lef/25 - 1) + (B*P*(Cyp - delta_Cyp_lef*(lef/25 - 1)))/(2*vt) + (B*R*(Cyr - delta_Cyr_lef*(lef/25 - 1)))/(2*vt)))/m + (0.000000034590341700000001074671459439479*S*ca*cb*pow(vt,3)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cx - delta_Cx_lef*(lef/25 - 1) + (Q*cbar*(Cxq - delta_Cxq_lef*(lef/25 - 1)))/(2*vt)))/m + (0.000000034590341700000001074671459439479*S*cb*sa*pow(vt,3)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cz - delta_Cz_lef*(lef/25 - 1) + (Q*cbar*(Czq - delta_Cz_lef*(lef/25 - 1)))/(2*vt)))/m) - (0.000000034590341700000001074671459439479*S*pow(vt,3)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cy + (delta_Cy_r30*rud)/30 + (2*ail*(delta_Cy_a20 - delta_Cy_a20_lef*(lef/25 - 1)))/43 - delta_Cy_lef*(lef/25 - 1) + (B*P*(Cyp - delta_Cyp_lef*(lef/25 - 1)))/(2*vt) + (B*R*(Cyr - delta_Cyr_lef*(lef/25 - 1)))/(2*vt)))/m)/(cb*pow(vt,2)); 
@@ -1097,6 +1175,7 @@ jac[104] = - (vt*(P*sa*sb*vt - R*ca*sb*vt) - sb*(sb*vt*(P*sa*sb*vt - R*ca*sb*vt)
 jac[105] = (vt*(cb*sa*vt + (0.00059425000000000005161843175116587*B*S*vt*(Cyp - delta_Cyp_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m) - sb*(sb*vt*(cb*sa*vt + (0.00059425000000000005161843175116587*B*S*vt*(Cyp - delta_Cyp_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m) - cb*sa*sb*pow(vt,2)))/(cb*pow(vt,2)); 
 jac[106] = (sb*(ca*cb*vt*(cb*sa*vt - (0.00059425000000000005161843175116587*S*cbar*vt*(Cxq - delta_Cxq_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m) - cb*sa*vt*(ca*cb*vt + (0.00059425000000000005161843175116587*S*cbar*vt*(Czq - delta_Cz_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m)))/(cb*pow(vt,2)); 
 jac[107] = -(vt*(ca*cb*vt - (0.00059425000000000005161843175116587*B*S*vt*(Cyr - delta_Cyr_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m) - sb*(sb*vt*(ca*cb*vt - (0.00059425000000000005161843175116587*B*S*vt*(Cyr - delta_Cyr_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/m) - ca*cb*sb*pow(vt,2)))/(cb*pow(vt,2)); 
+
 jac[108] = 0; 
 jac[109] = 0; 
 jac[110] = (0.000000034590341700000001074671459439479*B*Jz*S*pow(vt,2)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cl + beta*delta_Clbeta + (delta_Cl_r30*rud)/30 + (2*ail*(delta_Cl_a20 - delta_Cl_a20_lef*(lef/25 - 1)))/43 - delta_Cl_lef*(lef/25 - 1) + (B*P*(Clp - delta_Clp_lef*(lef/25 - 1)))/(2*vt) + (B*R*(Clr - delta_Clr_lef*(lef/25 - 1)))/(2*vt)) + 0.000000034590341700000001074671459439479*B*Jxz*S*pow(vt,2)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cn + beta*delta_Cnbeta + (delta_Cn_r30*rud)/30 + (2*ail*(delta_Cn_a20 - delta_Cn_a20_lef*(lef/25 - 1)))/43 - delta_Cn_lef*(lef/25 - 1) - (cbar*(xcgr - 1/4)*(Cy + (delta_Cy_r30*rud)/30 + (2*ail*(delta_Cy_a20 - delta_Cy_a20_lef*(lef/25 - 1)))/43 - delta_Cy_lef*(lef/25 - 1) + (B*P*(Cyp - delta_Cyp_lef*(lef/25 - 1)))/(2*vt) + (B*R*(Cyr - delta_Cyr_lef*(lef/25 - 1)))/(2*vt)))/B + (B*P*(Cnp - delta_Cnp_lef*(lef/25 - 1)))/(2*vt) + (B*R*(Cnr - delta_Cnr_lef*(lef/25 - 1)))/(2*vt)))/(pow(Jxz,2) - Jx*Jz); 
@@ -1109,6 +1188,7 @@ jac[116] = -(0.0011885000000000001032368635023317*B*Jxz*S*delta_Cnbeta*pow(vt,2)
 jac[117] = -(Jxz*Q*(Jx - Jy + Jz) + 0.0011885000000000001032368635023317*B*Jxz*S*pow(vt,2)*((B*(Cnp - delta_Cnp_lef*(lef/25 - 1)))/(2*vt) - (cbar*(Cyp - delta_Cyp_lef*(lef/25 - 1))*(xcgr - 1/4))/(2*vt))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)) + 0.00059425000000000005161843175116587*pow(B,2)*Jz*S*vt*(Clp - delta_Clp_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/(pow(Jxz,2) - Jx*Jz); 
 jac[118] = -(Heng*Jxz - R*(pow(Jxz,2) - Jz*(Jy - Jz)) + Jxz*P*(Jx - Jy + Jz))/(pow(Jxz,2) - Jx*Jz); 
 jac[119] = -(0.0011885000000000001032368635023317*B*Jxz*S*pow(vt,2)*((B*(Cnr - delta_Cnr_lef*(lef/25 - 1)))/(2*vt) - (cbar*(Cyr - delta_Cyr_lef*(lef/25 - 1))*(xcgr - 1/4))/(2*vt))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)) - Q*(pow(Jxz,2) - Jz*(Jy - Jz)) + 0.00059425000000000005161843175116587*pow(B,2)*Jz*S*vt*(Clr - delta_Clr_lef*(lef/25 - 1))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/(pow(Jxz,2) - Jx*Jz); 
+
 jac[120] = 0; 
 jac[121] = 0; 
 jac[122] = -(0.000000034590341700000001074671459439479*S*cbar*pow(vt,2)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(delta_Cm + delta_Cm_ds + Cm*eta_el + (xcgr - 1/4)*(Cz - delta_Cz_lef*(lef/25 - 1) + (Q*cbar*(Czq - delta_Cz_lef*(lef/25 - 1)))/(2*vt)) - delta_Cm_lef*(lef/25 - 1) + (Q*cbar*(Cmq - delta_Cmq_lef*(lef/25 - 1)))/(2*vt)))/Jy; 
@@ -1121,6 +1201,7 @@ jac[128] = 0;
 jac[129] = -(R*(Jx - Jz) + 2*Jxz*P)/Jy; 
 jac[130] = (0.0011885000000000001032368635023317*S*cbar*pow(vt,2)*((cbar*(Cmq - delta_Cmq_lef*(lef/25 - 1)))/(2*vt) + (cbar*(Czq - delta_Cz_lef*(lef/25 - 1))*(xcgr - 1/4))/(2*vt))*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(207/50)))/Jy; 
 jac[131] = -(Heng + P*(Jx - Jz) - 2*Jxz*R)/Jy; 
+
 jac[132] = 0; 
 jac[133] = 0; 
 jac[134] = (0.000000034590341700000001074671459439479*B*Jxz*S*pow(vt,2)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cl + beta*delta_Clbeta + (delta_Cl_r30*rud)/30 + (2*ail*(delta_Cl_a20 - delta_Cl_a20_lef*(lef/25 - 1)))/43 - delta_Cl_lef*(lef/25 - 1) + (B*P*(Clp - delta_Clp_lef*(lef/25 - 1)))/(2*vt) + (B*R*(Clr - delta_Clr_lef*(lef/25 - 1)))/(2*vt)) + 0.000000034590341700000001074671459439479*B*Jx*S*pow(vt,2)*pow((1.0 - 0.0000070299999999999996077638432512291*alt),(157/50))*(Cn + beta*delta_Cnbeta + (delta_Cn_r30*rud)/30 + (2*ail*(delta_Cn_a20 - delta_Cn_a20_lef*(lef/25 - 1)))/43 - delta_Cn_lef*(lef/25 - 1) - (cbar*(xcgr - 1/4)*(Cy + (delta_Cy_r30*rud)/30 + (2*ail*(delta_Cy_a20 - delta_Cy_a20_lef*(lef/25 - 1)))/43 - delta_Cy_lef*(lef/25 - 1) + (B*P*(Cyp - delta_Cyp_lef*(lef/25 - 1)))/(2*vt) + (B*R*(Cyr - delta_Cyr_lef*(lef/25 - 1)))/(2*vt)))/B + (B*P*(Cnp - delta_Cnp_lef*(lef/25 - 1)))/(2*vt) + (B*R*(Cnr - delta_Cnr_lef*(lef/25 - 1)))/(2*vt)))/(pow(Jxz,2) - Jx*Jz); 
