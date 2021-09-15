@@ -16,6 +16,7 @@ from sys import exit
 from scipy.sparse import csc_matrix
 import osqp
 import ctypes
+import scipy.io
 
 # custom files
 from env import F16
@@ -28,18 +29,8 @@ test_f16 = test_F16(state_vector, input_vector, simulation_parameters, state_spa
 # test_f16.offline_LQR_nl()
 # test_f16.offline_LQR_lin()
 
-## lets try and call nlplants new jacobian func!
+mat = scipy.io.loadmat("MATLAB_SS.mat")
 
-jacobian = np.zeros(144)
-
-x = f16.x.values
-xdot = np.zeros(18)
-
-# this works
-# nlplant.Nlplant(ctypes.c_void_p(x.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(1))
-nlplant.Jac(ctypes.c_void_p(x.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(1), ctypes.c_void_p(jacobian.ctypes.data))
-
-jacobian = jacobian.reshape((12,12))
 
 
 exit()

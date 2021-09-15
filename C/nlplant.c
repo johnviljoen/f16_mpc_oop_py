@@ -557,7 +557,7 @@ y[2] = nz_cg ;
 /*########################################*/
 /*########################################*/
 
-void Jac(double *xu, double *xdot, int fidelity, double *jac){ //I modified to have fidelity as a seperate input!
+void Jac(double *xu, double *xdot, int fidelity, double *jac){ 
 
   int fi_flag;
 

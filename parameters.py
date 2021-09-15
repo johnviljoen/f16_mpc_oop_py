@@ -28,7 +28,7 @@ fi_flag = 1
 # stability_flag only functional for high fidelity model currently!
 # stability_flag = 1 -> unstable xcg 35% model
 # stability_flag = 0 -> stable xcg 25% model
-stab_flag = 1
+stab_flag = 0
 
 # In[initial_conditions]  
 
@@ -110,7 +110,7 @@ if stab_flag == 1:
 elif stab_flag == 0:
     so_file = os.getcwd() + "/C/nlplant_xcg25.so"
     
-so_file = os.getcwd() + "/C/nlplant.so"
+# so_file = os.getcwd() + "/C/nlplant.so"
 nlplant = CDLL(so_file)
 
 states = ['npos','epos','h','phi','theta','psi','V','alpha','beta','p','q','r','T','dh','da','dr','lf2','lf1']

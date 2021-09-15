@@ -150,6 +150,36 @@ class test_F16(unittest.TestCase, F16):
         
         pass
     
+    def test_linearisation(self):
+        
+        # MATLAB output for steady wings level cruise at 10000ft 700fps
+        MATLAB_evals = np.array([
+        0.0000 + 0.0000j,
+        0.0000 + 0.0000j,
+        0.0000 + 0.0000j,
+        -7.3529 + 0.0000j,
+        -7.2500 + 0.0000j,
+        -1.3929 + 2.7668j,
+        -1.3929 - 2.7668j,
+        -0.0067 + 0.0670j,
+        -0.0067 - 0.0670j,
+        0.0000 + 0.0000j,
+        -0.4478 + 3.9347j,
+        -0.4478 - 3.9347j,
+        -3.7888 + 0.0000j,
+        -0.0089 + 0.0000j,
+        -1.0000 + 0.0000j,
+        -20.2000 + 0.0000j,
+        -20.2000 + 0.0000j, 
+        -20.2000 + 0.0000j])
+        
+        A,B,C,D = self.linearise(self.x.values, self.u.values)
+        
+        Python_evals = np.linalg.eig(A)
+        
+        print("MATLAB_evals:", MATLAB_evals)
+        print("Python_evals:", Python_evals)
+    
     def offline_LQR_nl(self):
         
         self.paras.time_end = 10

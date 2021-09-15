@@ -96,7 +96,7 @@ class F16(gym.Env):
         #--------leading edge flap model---------#
         temp[5], temp[4] = upd_lef(x[2], x[6], coeff, x[7], x[17], x[16], self.nlplant)
         #----------run nlplant for xdot----------#
-        self.nlplant.Nlplant(ctypes.c_void_p(x.ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(self.paras.fi_flag))    
+        self.nlplant.Nlplant(ctypes.c_void_p(x[:17].ctypes.data), ctypes.c_void_p(xdot.ctypes.data), ctypes.c_int(self.paras.fi_flag))    
         #----------assign actuator xdots---------#
         xdot[12:18] = temp
         return xdot
