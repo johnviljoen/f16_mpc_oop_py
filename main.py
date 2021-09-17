@@ -29,8 +29,9 @@ test_f16 = test_F16(state_vector, input_vector, simulation_parameters, state_spa
 # test_f16.offline_LQR_nl()
 # test_f16.offline_LQR_lin()
 
-mat = scipy.io.loadmat("MATLAB_SS.mat")
+# mat = scipy.io.loadmat("MATLAB_SS.mat")
 
+test_f16.test_linearisation()
 
 
 exit()

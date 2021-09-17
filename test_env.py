@@ -152,33 +152,74 @@ class test_F16(unittest.TestCase, F16):
     
     def test_linearisation(self):
         
+        """ In this function we import both the Python and MATLAB linearisations
+        conducted at 10000ft and 700fps wings level flight in order to compare the two"""
+        
         # MATLAB output for steady wings level cruise at 10000ft 700fps
-        MATLAB_evals = np.array([
-        0.0000 + 0.0000j,
-        0.0000 + 0.0000j,
-        0.0000 + 0.0000j,
-        -7.3529 + 0.0000j,
-        -7.2500 + 0.0000j,
-        -1.3929 + 2.7668j,
-        -1.3929 - 2.7668j,
-        -0.0067 + 0.0670j,
-        -0.0067 - 0.0670j,
-        0.0000 + 0.0000j,
-        -0.4478 + 3.9347j,
-        -0.4478 - 3.9347j,
-        -3.7888 + 0.0000j,
-        -0.0089 + 0.0000j,
-        -1.0000 + 0.0000j,
-        -20.2000 + 0.0000j,
-        -20.2000 + 0.0000j, 
-        -20.2000 + 0.0000j])
+        # MATLAB_evals = np.array([
+        # 0.0000 + 0.0000j,
+        # 0.0000 + 0.0000j,
+        # 0.0000 + 0.0000j,
+        # -7.3529 + 0.0000j,
+        # -7.2500 + 0.0000j,
+        # -1.3929 + 2.7668j,
+        # -1.3929 - 2.7668j,
+        # -0.0067 + 0.0670j,
+        # -0.0067 - 0.0670j,
+        # 0.0000 + 0.0000j,
+        # -0.4478 + 3.9347j,
+        # -0.4478 - 3.9347j,
+        # -3.7888 + 0.0000j,
+        # -0.0089 + 0.0000j,
+        # -1.0000 + 0.0000j,
+        # -20.2000 + 0.0000j,
+        # -20.2000 + 0.0000j, 
+        # -20.2000 + 0.0000j])
         
-        A,B,C,D = self.linearise(self.x.values, self.u.values)
+        py_A,py_B,py_C,py_D = self.linearise(self.x.values, self.u.values)
         
-        Python_evals = np.linalg.eig(A)
+        # Python_evals = np.linalg.eig(A)
         
-        print("MATLAB_evals:", MATLAB_evals)
-        print("Python_evals:", Python_evals)
+        # print("MATLAB_evals:", MATLAB_evals)
+        # print("Python_evals:", Python_evals)
+        
+        mat = scipy.io.loadmat("MATLAB_SS.mat")
+        
+        MAT_A = mat['A']
+        MAT_B = mat['B']
+        MAT_C = mat['C']
+        MAT_D = mat['D']
+        
+        # lets simulate a timehistory of both linear systems        
+        self.paras.time_end = 10
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        
+        # create storage
+        MAT_x_storage = np.zeros([len(rng),self.ss.Ad.shape[0]])
+        py_x_storage = np.zeros([len(rng),self.ss.Ad.shape[0]])
+        u_storage = np.zeros([len(rng),self.ss.Bd.shape[1]])
+        
+        py_x = np.copy(self.x.initial_condition)
+        MAT_x = np.copy(self.x.initial_condition)
+        u = np.copy(self.u.initial_condition)
+        
+        for idx, val in enumerate(rng):
+            
+            print('idx:', idx)
+            
+            py_x = py_A @ py_x + py_B @ u
+            MAT_x = MAT_A @ MAT_x + MAT_B @ u
+            
+            py_x_storage[idx,:] = py_x
+            MAT_x_storage[idx,:] = MAT_x
+            u_storage[idx,:] = u
+            
+        vis_x(py_x_storage, rng)
+        vis_x(MAT_x_storage, rng)
+        
+        print('MATLAB eigenvalues: \n', np.linalg.eig(MAT_A)[0])
+        print('python eigenvalues: \n', np.linalg.eig(py_A)[0])
     
     def offline_LQR_nl(self):
         
