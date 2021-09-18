@@ -220,6 +220,44 @@ class test_F16(unittest.TestCase, F16):
         
         print('MATLAB eigenvalues: \n', np.linalg.eig(MAT_A)[0])
         print('python eigenvalues: \n', np.linalg.eig(py_A)[0])
+        
+    def offline_full_LQR_lin(self):
+        
+        self.paras.time_end = 10
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        
+        # create storage
+        x_storage = np.zeros([len(rng),self.ss.Ad.shape[0]])
+        u_storage = np.zeros([len(rng),self.ss.Bd.shape[1]])
+        
+        Q = self.ss.Cd.T @ self.ss.Cd
+        R = np.eye(4)
+        
+        K = dlqr(self.ss.Ad, self.ss.Bd, Q, R)
+        
+        x_ref = np.copy(self.x.values)
+        
+        u0 = np.copy(self.u.values)
+        x = np.copy(self.x.values)
+        u = np.copy(u0)
+        
+        for idx, val in enumerate(rng):
+            
+            print('idx:', idx)
+            print('u:',u)
+            
+            u = u0 - K @ (x - x_ref)
+            u = u0
+            
+            x = self.ss.Ad @ x + self.ss.Bd @ u
+            
+            x_storage[idx,:] = x
+            u_storage[idx,:] = u
+                        
+        vis_mpc_x(x_storage, rng)
+        vis_mpc_u(u_storage, rng)
+        
     
     def offline_LQR_nl(self):
         
@@ -255,7 +293,49 @@ class test_F16(unittest.TestCase, F16):
         vis_x(x_storage, rng)
         vis_u(u_storage, rng)
         
-    def offline_LQR_lin(self):
+    def SSR_continuous_LQR_lin(self):
+        
+        self.paras.time_end = 10
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        
+        # create storage
+        x_storage = np.zeros([len(rng),self.ssr.Ac.shape[0]])
+        u_storage = np.zeros([len(rng),self.ssr.Bc.shape[1]])
+        
+        Q = self.ssr.Cc.T @ self.ssr.Cc
+        R = np.eye(3)
+        
+        K = lqr(self.ssr.Ac, self.ssr.Bc, Q, R)[0]
+        print(K)
+        
+        x_ref = np.copy(self.x._get_mpc_x())
+        
+        u0 = np.copy(self.u._get_mpc_u())
+        x = np.copy(self.x._get_mpc_x())
+        u = np.copy(u0)
+        
+        for idx, val in enumerate(rng):
+            
+            print('idx:', idx)
+            print('u:',u)
+            
+            u = u0 - K @ (x - x_ref)
+            u = u0
+            
+            xdot = self.ssr.Ac @ x + self.ssr.Bc @ u
+            x += xdot*self.paras.dt
+            
+            print(np.linalg.eig(self.ssr.Ac - self.ssr.Bc@K)[0])
+            exit()
+            
+            x_storage[idx,:] = x
+            u_storage[idx,:] = u
+                        
+        vis_mpc_x(x_storage, rng)
+        vis_mpc_u(u_storage, rng)
+        
+    def SSR_discrete_LQR_lin(self):
         
         self.paras.time_end = 10
         
