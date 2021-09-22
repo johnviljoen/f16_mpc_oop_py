@@ -309,19 +309,38 @@ class test_F16(unittest.TestCase, F16):
         x = np.copy(self.x._get_mpc_x())
         u = np.copy(u0)
         
+        error_int = 0
+        
+        # with negatives here it is trying to self correct! 
+        # Stability has so far failed with gains attempted
+        Kp = -10
+        Ki = -5
+        
         for idx, val in enumerate(rng):
             
             # print('idx:', idx)
             # print('u:',u)
             
-            u = (u0 - K @ (x - x_ref))
-            # u = u0
+            error = q_dem-x[5]
+            error_int += error
+            
+            dh_cmd = error * Kp + error_int * Ki + u0[0]
+            
+            da_cmd = 0
+            dr_cmd = 0
+            
+            u = np.array([dh_cmd, da_cmd, dr_cmd])
+            print('error:',error)
+            print('error_int:',error_int)
             print('u:',u)
             
             xdot = self.ssr.Ac @ x + self.ssr.Bc @ u
             x += xdot*self.paras.dt
             
             # print(np.max(np.real(np.linalg.eig(self.ssr.Ac - self.ssr.Bc@K)[0])))
+            
+            if idx == 1000:
+                exit()
             
             x_storage[idx,:] = x
             u_storage[idx,:] = u

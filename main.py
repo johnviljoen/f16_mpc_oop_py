@@ -27,7 +27,7 @@ f16 = F16(state_vector, input_vector, simulation_parameters, state_space, nlplan
 test_f16 = test_F16(state_vector, input_vector, simulation_parameters, state_space, nlplant)
 
 # test_f16.offline_LQR_nl()
-x, x_ref, K, Ad, Bd, u0, u = test_f16.SSR_discrete_LQR_lin()
+test_f16.SSR_continuous_PID_lin()
 
 # mat = scipy.io.loadmat("MATLAB_SS.mat")
 
