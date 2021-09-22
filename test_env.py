@@ -293,6 +293,42 @@ class test_F16(unittest.TestCase, F16):
         vis_x(x_storage, rng)
         vis_u(u_storage, rng)
         
+    def SSR_continuous_PID_lin(self):
+        
+        self.paras.time_end = 10
+        
+        rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
+        
+        # create storage
+        x_storage = np.zeros([len(rng),self.ssr.Ac.shape[0]])
+        u_storage = np.zeros([len(rng),self.ssr.Bc.shape[1]])
+        
+        q_dem = 0
+        
+        u0 = np.copy(self.u._get_mpc_u())
+        x = np.copy(self.x._get_mpc_x())
+        u = np.copy(u0)
+        
+        for idx, val in enumerate(rng):
+            
+            # print('idx:', idx)
+            # print('u:',u)
+            
+            u = (u0 - K @ (x - x_ref))
+            # u = u0
+            print('u:',u)
+            
+            xdot = self.ssr.Ac @ x + self.ssr.Bc @ u
+            x += xdot*self.paras.dt
+            
+            # print(np.max(np.real(np.linalg.eig(self.ssr.Ac - self.ssr.Bc@K)[0])))
+            
+            x_storage[idx,:] = x
+            u_storage[idx,:] = u
+                        
+        vis_mpc_x(x_storage, rng)
+        vis_mpc_u(u_storage, rng)
+        
     def SSR_continuous_LQR_lin(self):
         
         self.paras.time_end = 10
@@ -306,7 +342,7 @@ class test_F16(unittest.TestCase, F16):
         Q = self.ssr.Cc.T @ self.ssr.Cc
         R = np.eye(3)
         
-        K = lqr(self.ssr.Ac, self.ssr.Bc, Q, R)[0]
+        K = np.array(lqr(self.ssr.Ac, self.ssr.Bc, Q, R)[0])
         print(K)
         
         x_ref = np.copy(self.x._get_mpc_x())
@@ -317,17 +353,17 @@ class test_F16(unittest.TestCase, F16):
         
         for idx, val in enumerate(rng):
             
-            print('idx:', idx)
-            print('u:',u)
+            # print('idx:', idx)
+            # print('u:',u)
             
-            u = u0 - K @ (x - x_ref)
-            u = u0
+            u = (u0 - K @ (x - x_ref))
+            # u = u0
+            print('u:',u)
             
             xdot = self.ssr.Ac @ x + self.ssr.Bc @ u
             x += xdot*self.paras.dt
             
-            print(np.linalg.eig(self.ssr.Ac - self.ssr.Bc@K)[0])
-            exit()
+            # print(np.max(np.real(np.linalg.eig(self.ssr.Ac - self.ssr.Bc@K)[0])))
             
             x_storage[idx,:] = x
             u_storage[idx,:] = u
@@ -346,7 +382,13 @@ class test_F16(unittest.TestCase, F16):
         u_storage = np.zeros([len(rng),self.ssr.Bd.shape[1]])
         
         Q = self.ssr.Cd.T @ self.ssr.Cd
+        Q[4,4] = 100
+        Q[5,5] = 100
+        Q[6,6] = 100
         R = np.eye(3)
+        R[0,0] = 0
+        R[1,1] = 0
+        R[2,2] = 0
         
         K = dlqr(self.ssr.Ad, self.ssr.Bd, Q, R)
         
@@ -358,11 +400,12 @@ class test_F16(unittest.TestCase, F16):
         
         for idx, val in enumerate(rng):
             
-            print('idx:', idx)
-            print('u:',u)
+            # print('idx:', idx)
+            # print('u:',u)
             
             u = u0 - K @ (x - x_ref)
-            u = u0
+            # u = u0
+            print(x-x_ref)
             
             x = self.ssr.Ad @ x + self.ssr.Bd @ u
             
@@ -371,6 +414,8 @@ class test_F16(unittest.TestCase, F16):
                         
         vis_mpc_x(x_storage, rng)
         vis_mpc_u(u_storage, rng)
+        
+        return x, x_ref, K, self.ssr.Ad, self.ssr.Bd, u0, u
         
     def test_control(self):
         
