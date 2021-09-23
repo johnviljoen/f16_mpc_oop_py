@@ -15,7 +15,6 @@ from parameters import state_vector, input_vector, simulation_parameters, state_
 import numpy as np
 
 f16 = F16(state_vector, input_vector, simulation_parameters, state_space, nlplant)
-txt = Text(text="")
 
 class F16_body(Entity):
     def __init__(self):
@@ -45,7 +44,7 @@ class Cam(Entity):
         camera.rotation = (10,0,0)
         camera.clip_plane_near = 0.0001
         camera.clip_plane_far = 100000
-        camera.fov = 45
+        camera.fov = 20
         camera.z = -10
         
 def print_states():
@@ -74,58 +73,95 @@ def print_states():
     psi_print.x = -0.5
     psi_print.y = 0.15
     
+    V_print = Text(text=f"V: {f16.x.values[6]}")
+    V_print.x = -0.5
+    V_print.y = 0.10
+    
+    alpha_print = Text(text=f"alpha: {f16.x.values[7]}")
+    alpha_print.x = -0.5
+    alpha_print.y = 0.05
+    
+    beta_print = Text(text=f"beta: {f16.x.values[8]}")
+    beta_print.x = -0.5
+    beta_print.y = 0.0
+    
+    p_print = Text(text=f"p: {f16.x.values[9]}")
+    p_print.x = -0.5
+    p_print.y = -0.05
+    
+    q_print = Text(text=f"q: {f16.x.values[10]}")
+    q_print.x = -0.5
+    q_print.y = -0.1
+    
+    r_print = Text(text=f"r: {f16.x.values[11]}")
+    r_print.x = -0.5
+    r_print.y = -0.15
+    
     destroy(npos_print, delay=time.dt)
     destroy(epos_print, delay=time.dt)
     destroy(h_print, delay=time.dt)
     destroy(phi_print, delay=time.dt)
     destroy(theta_print, delay=time.dt)
     destroy(psi_print, delay=time.dt)
+    destroy(V_print, delay=time.dt)
+    destroy(alpha_print, delay=time.dt)
+    destroy(beta_print, delay=time.dt)
+    destroy(p_print, delay=time.dt)
+    destroy(q_print, delay=time.dt)
+    destroy(r_print, delay=time.dt)
     
-def destroy_states():
-    pass
+K = f16._calc_LQR_gain()
     
-            
 def update():
-    dh_cmd = 0
-    da_cmd = 0
-    dr_cmd = 0
+    
+    if held_keys['esc']:
+        application.quit()
+    
+    q_cmd = 0
+    p_cmd = 0
+    r_cmd = 0
     
     print_states()
     
     if held_keys['a']:
-        da_cmd = 21.5
+        p_cmd = -21.5
         input_text = Text(text='a')
         destroy(input_text, delay=.1)
     if held_keys['d']:
-        da_cmd = -21.5
+        p_cmd = 21.5
         input_text = Text(text='d')
         destroy(input_text, delay=.1)
     if held_keys['w']:
-        dh_cmd = 25
+        q_cmd = -25
         input_text = Text(text='w')
         destroy(input_text, delay=.1)
     if held_keys['s']:
-        dh_cmd = -25
+        q_cmd = 25
         input_text = Text(text='s')
         destroy(input_text, delay=.1)
     if held_keys['q']:
-        dr_cmd = -30
+        r_cmd = -30
         input_text = Text(text='q')
         destroy(input_text, delay=.1)
     if held_keys['e']:
-        dr_cmd = 30
+        r_cmd = 30
         input_text = Text(text='e')
         destroy(input_text, delay=.1)
     Thrust_cmd = 2000
+    
+    # simulation step
+    [dh_cmd, da_cmd, dr_cmd] = f16._calc_MPC_action(p_cmd,q_cmd,r_cmd, 5)
+    # [dh_cmd, da_cmd, dr_cmd] = f16._calc_LQR_action(p_cmd,q_cmd,r_cmd, K)
     f16.step(np.array([Thrust_cmd, dh_cmd, da_cmd, dr_cmd]))
-    if held_keys['esc']:
-        application.quit()
+    
+    # retrieve outputs
     phi = f16.x.values[3]
     theta = f16.x.values[4]
     psi = f16.x.values[5]
     f16_body.rotation_z = phi*180/np.pi
     f16_body.rotation_x = -theta*180/np.pi
-    f16_body_rotation_y = psi*180/np.pi
+    f16_body.rotation_y = psi*180/np.pi
+    
     # rotate_entity(f16_body)
     # translate_entity(camera)
 
@@ -166,12 +202,6 @@ floor = Floor()
 cam = Cam()
 
 f16.paras.dt = 1/60
-
-
-
-
-
-
 
 app.run()
 

@@ -261,7 +261,7 @@ class test_F16(unittest.TestCase, F16):
     
     def offline_LQR_nl(self):
         
-        self.paras.time_end = 10
+        self.paras.time_end = 100
         
         rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
         

@@ -21,6 +21,7 @@ import osqp
 from scipy.sparse import csc_matrix
 from sys import exit
 from parameters import stateSpace
+from ursina import *
 
 # custom files
 from utils import *
@@ -356,6 +357,21 @@ class F16(gym.Env):
         
         return K
     
+    def _calc_LQR_action(self, p_dem, q_dem, r_dem, K):
+        
+        # K = self._calc_LQR_gain()
+        
+        x = self.x._get_mpc_x()
+        u0 = self.u.initial_condition[1:]
+        x_ref = np.copy(x)
+        x_ref[4] = p_dem
+        x_ref[5] = q_dem
+        x_ref[6] = r_dem
+        
+        u = - K @ (x_ref-x) + u0
+        
+        return u
+    
     def _calc_MPC_action(self, p_dem, q_dem, r_dem, hzn):
         
         dt = self.paras.dt 
@@ -388,9 +404,9 @@ class F16(gym.Env):
         # Q[9,9] = 0
         # R = np.eye(len(u)) * 0.01 # penalise inputs
         
-        R = np.array([[0.001,   0,  0   ],
-                      [0,       1,  0   ],
-                      [0,       0,  0.01]])
+        R = np.array([[1,   0,  0],
+                      [0,   1,  0],
+                      [0,   0,  1]])
                 
         OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u = setup_OSQP(
             x_ref, A, B, Q, R, hzn, dt, x, act_states,\
@@ -421,6 +437,7 @@ class F16(gym.Env):
             
         return u
     
-        
-
     
+                
+        
+            

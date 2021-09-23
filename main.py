@@ -26,6 +26,9 @@ from parameters import state_vector, input_vector, simulation_parameters, state_
 f16 = F16(state_vector, input_vector, simulation_parameters, state_space, nlplant)
 test_f16 = test_F16(state_vector, input_vector, simulation_parameters, state_space, nlplant)
 
+# 1 means visualise in flight sim, 0 means dont
+flight_sim = True
+
 # test_f16.offline_LQR_nl()
 # test_f16.SSR_continuous_PID_lin()
 
@@ -33,6 +36,9 @@ test_f16 = test_F16(state_vector, input_vector, simulation_parameters, state_spa
 
 # test_f16.test_linearisation()
 
+# run the flight sim
+if flight_sim:
+    exec(open('flight_sim.py').read())
 
 exit()
 
