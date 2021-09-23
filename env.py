@@ -103,6 +103,14 @@ class F16(gym.Env):
     
     def step(self, action):
         
+        """
+        action of form 1D numpy array:
+            Thrust demand
+            dh
+            da
+            dr
+        """
+        
         # check the current state isnt outside of C lookup table bounds
         
         bounds_check = [self.x.values[i] < self.x.lower_bound[i] or self.x.values[i] > self.x.upper_bound[i] for i in range(len(self.x.values))]
