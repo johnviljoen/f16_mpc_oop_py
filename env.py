@@ -357,12 +357,10 @@ class F16(gym.Env):
         
         return K
     
-    def _calc_LQR_action(self, p_dem, q_dem, r_dem, K):
-        
-        # K = self._calc_LQR_gain()
-        
-        x = self.x._get_mpc_x()
-        u0 = self.u.initial_condition[1:]
+    def _calc_LQR_action(self, p_dem, q_dem, r_dem, K, x, u0):
+                
+        # x = self.x._get_mpc_x()
+        # u0 = self.u.initial_condition[1:]
         x_ref = np.copy(x)
         x_ref[4] = p_dem
         x_ref[5] = q_dem
@@ -420,7 +418,7 @@ class F16(gym.Env):
         # return OSQP_P, OSQP_q, OSQP_A, OSQP_l, OSQP_u
             
         m = osqp.OSQP()
-        m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=False, polish=False)
+        m.setup(P=csc_matrix(OSQP_P), q=OSQP_q, A=csc_matrix(OSQP_A), l=OSQP_l, u=OSQP_u, max_iter=40000, verbose=True, polish=False)
         res = m.solve()
         
         return res.x[0:len(u)]

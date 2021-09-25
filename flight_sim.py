@@ -16,6 +16,8 @@ import numpy as np
 
 f16 = F16(state_vector, input_vector, simulation_parameters, state_space, nlplant)
 
+
+
 class F16_body(Entity):
     def __init__(self):
         super().__init__(
@@ -97,6 +99,26 @@ def print_states():
     r_print.x = -0.5
     r_print.y = -0.15
     
+    T_print = Text(text=f"T: {f16.x.values[12]}")
+    T_print.x = +0.5
+    T_print.y = +0.20
+    
+    dh_print = Text(text=f"dh: {f16.x.values[13]}")
+    dh_print.x = +0.5
+    dh_print.y = +0.15
+    
+    da_print = Text(text=f"da: {f16.x.values[14]}")
+    da_print.x = +0.5
+    da_print.y = +0.10
+    
+    dr_print = Text(text=f"dr: {f16.x.values[15]}")
+    dr_print.x = +0.5
+    dr_print.y = 0.05
+    
+    dr_print = Text(text=f"dr: {f16.x.values[15]}")
+    dr_print.x = +0.5
+    dr_print.y = 0.05
+    
     destroy(npos_print, delay=time.dt)
     destroy(epos_print, delay=time.dt)
     destroy(h_print, delay=time.dt)
@@ -109,9 +131,13 @@ def print_states():
     destroy(p_print, delay=time.dt)
     destroy(q_print, delay=time.dt)
     destroy(r_print, delay=time.dt)
+    destroy(T_print, delay=time.dt)
+    destroy(dh_print, delay=time.dt)
+    destroy(da_print, delay=time.dt)
+    destroy(dr_print, delay=time.dt)
     
 K = f16._calc_LQR_gain()
-    
+
 def update():
     
     if held_keys['esc']:
@@ -121,7 +147,8 @@ def update():
     p_cmd = 0
     r_cmd = 0
     
-    print_states()
+    
+    # print_states()
     
     if held_keys['a']:
         p_cmd = -21.5
@@ -147,11 +174,11 @@ def update():
         r_cmd = 30
         input_text = Text(text='e')
         destroy(input_text, delay=.1)
-    Thrust_cmd = 2000
+    Thrust_cmd = 10000
     
     # simulation step
-    [dh_cmd, da_cmd, dr_cmd] = f16._calc_MPC_action(p_cmd,q_cmd,r_cmd, 5)
-    # [dh_cmd, da_cmd, dr_cmd] = f16._calc_LQR_action(p_cmd,q_cmd,r_cmd, K)
+    # [dh_cmd, da_cmd, dr_cmd] = f16._calc_MPC_action(p_cmd,q_cmd,r_cmd, 5)
+    [dh_cmd, da_cmd, dr_cmd] = f16._calc_LQR_action(p_cmd,q_cmd,r_cmd, K)
     f16.step(np.array([Thrust_cmd, dh_cmd, da_cmd, dr_cmd]))
     
     # retrieve outputs

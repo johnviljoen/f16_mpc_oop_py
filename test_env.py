@@ -261,7 +261,8 @@ class test_F16(unittest.TestCase, F16):
     
     def offline_LQR_nl(self):
         
-        self.paras.time_end = 100
+        self.paras.time_end = 10
+        # self.paras.dt = 1/60
         
         rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
         
@@ -275,8 +276,11 @@ class test_F16(unittest.TestCase, F16):
         K = dlqr(self.ssr.Ad, self.ssr.Bd, Q, R)
         
         x_ref = np.copy(self.x._get_mpc_x())
+        x_ref[4] = 0
+        x_ref[5] = 0
+        x_ref[6] = 0
         
-        u0 = np.copy(self.u._get_mpc_u())
+        u0 = self.u.initial_condition[1:]
         
         for idx, val in enumerate(rng):
             
@@ -288,6 +292,7 @@ class test_F16(unittest.TestCase, F16):
             u_storage[idx,:] = self.u.values
             
             u = u0 - K @ (self.x._get_mpc_x() - x_ref)
+            u = self._calc_LQR_action(0,0,0,K)
             self.u.values[1:] = u
             
         vis_x(x_storage, rng)
@@ -511,6 +516,10 @@ class test_F16(unittest.TestCase, F16):
         
             # reference x is trim, i.e. the current state, therefore it should stay there
             x_ref = np.copy(x)
+            
+            Q = np.eye(len(x))
+        
+            R = np.eye(len(u))
         
         else:
             
@@ -528,8 +537,7 @@ class test_F16(unittest.TestCase, F16):
             Q = np.array([[1.0, 0.0], [0.0, 0.0]])
             R = np.array([[1.0]])
         
-        Q = np.eye(len(x))
-        R = np.eye(len(u))*0.01
+        
         
         K = dlqr(A,B,Q,R)
                 
@@ -572,24 +580,15 @@ class test_F16(unittest.TestCase, F16):
         # now we have the simulation p r i m e d for timehistory from trim
         # if the LQR deviates from where it is right now theres a problem
         # assuming LQR is implemented as u = -K @ (xref - x)
+        p_dem = 0
+        q_dem = 0
+        r_dem = 0
         
-        Ac,Bc,Cc,Dc = self.linearise(self.x._get_mpc_x(), self.u._get_mpc_u(), _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
-        A,B,C,D = cont2discrete((Ac,Bc,Cc,Dc), self.paras.dt)[0:4]    
+        x = self.x._get_mpc_x()
+        u = self.u._get_mpc_u()
         
-        x = self.x._get_mpc_x()[:,None]
-        u = self.u._get_mpc_u()[:,None]
-        
-        Q = np.eye(len(x))
-        R = np.eye(len(u))*100
-        
-        K = dlqr(A,B,Q,R)
-        K = lqr(Ac,Bc,Q,R)[0]
-        
-        # return Ac, Bc, K
-            
-        # reference x is trim, i.e. the current state, therefore it should stay there
-        x_ref = np.copy(x)
-        
+        K = self._calc_LQR_gain()
+                
         rng = np.linspace(self.paras.time_start, self.paras.time_end, int((self.paras.time_end-self.paras.time_start)/self.paras.dt))
         # bar = progressbar.ProgressBar(maxval=len(rng)).start()
         
@@ -598,25 +597,20 @@ class test_F16(unittest.TestCase, F16):
         u_storage = np.zeros([len(rng),len(self.u._get_mpc_u())])
         
         x_ref = np.copy(self.x._get_mpc_x())
+        x_ref[4] = p_dem
+        x_ref[5] = q_dem
+        x_ref[6] = r_dem
+        
+        u0 = np.copy(u)
 
         for idx, val in enumerate(rng):
             
             print('idx:', idx)
             
             
-            u = (- K @ (self.x._get_mpc_x() - x_ref)) #* np.pi/180
-            u_storage[idx,:] = u
+            u = self._calc_LQR_action(p_dem, q_dem, r_dem, K)
             
-            self.u.values[1:] = u
-            
-            A,B,C,D = self.linearise(self.x._get_mpc_x(), self.u._get_mpc_u(), _calc_xdot=self._calc_xdot_na, get_obs=self._get_obs_na)
-                        
-            evals, _ = np.linalg.eig(A-B@K)
-            
-            if np.real(evals)[np.real(evals).argmax()] > 0:
-                
-                print('unstable poles')
-                
+            self.u.values[1:] = u                
             
             print('u:',self.u.values)
             
